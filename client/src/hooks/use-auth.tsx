@@ -7,7 +7,6 @@ import {
 import { InsertUser, User as SelectUser } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { z } from "zod";
 
 // Define the types we need for auth
 type User = SelectUser;
@@ -31,10 +30,12 @@ type AuthContextType = {
   forgotPasswordMutation: UseMutationResult<{ message: string }, Error, { email: string }>;
 };
 
-export const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  
+  // Fetch the current user
   const {
     data: user,
     error,
@@ -44,9 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
     refetchOnWindowFocus: true,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
+  // Login mutation
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
       const res = await apiRequest("POST", "/api/login", credentials);
@@ -62,12 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onError: (error: Error) => {
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Invalid credentials",
         variant: "destructive",
       });
     },
   });
 
+  // Register mutation
   const registerMutation = useMutation({
     mutationFn: async (userData: RegisterData) => {
       const res = await apiRequest("POST", "/api/register", userData);
@@ -83,12 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onError: (error: Error) => {
       toast({
         title: "Registration failed",
-        description: error.message,
+        description: error.message || "Could not create account",
         variant: "destructive",
       });
     },
   });
 
+  // Logout mutation
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/logout");
@@ -109,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
   
+  // Forgot password mutation
   const forgotPasswordMutation = useMutation({
     mutationFn: async ({ email }: { email: string }) => {
       const res = await apiRequest("POST", "/api/forgot-password", { email });
@@ -117,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSuccess: (data) => {
       toast({
         title: "Password reset email sent",
-        description: data.message,
+        description: data.message || "If this email exists, you will receive reset instructions",
       });
     },
     onError: (error: Error) => {
@@ -129,18 +134,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const value = {
+    user: user ?? null,
+    isLoading,
+    error,
+    loginMutation,
+    logoutMutation,
+    registerMutation,
+    forgotPasswordMutation,
+  };
+
   return (
-    <AuthContext.Provider
-      value={{
-        user: user ?? null,
-        isLoading,
-        error,
-        loginMutation,
-        logoutMutation,
-        registerMutation,
-        forgotPasswordMutation,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
