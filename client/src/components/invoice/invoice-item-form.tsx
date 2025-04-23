@@ -97,10 +97,19 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
 
   // Form submission handler
   const onSubmit = (values: z.infer<typeof invoiceItemFormSchema>) => {
-    // Create invoice item with calculated amount
+    // Calculate amount with proper precision
+    const quantity = parseFloat(values.quantity.toString());
+    const rate = parseFloat(values.rate.toString());
+    const calcAmount = quantity * rate;
+    
+    // Create invoice item with properly calculated and rounded amount
     const itemData = {
       ...values,
-      amount: parseFloat((values.quantity * values.rate).toFixed(2)),
+      quantity: quantity,
+      rate: rate,
+      amount: parseFloat(calcAmount.toFixed(2)),
+      // Make sure gstRate is correctly preserved as a number
+      gstRate: parseFloat(values.gstRate.toString()),
       // Only set productId if it's a real product (not "custom")
       productId: values.productId && values.productId !== "custom" ? parseInt(values.productId) : undefined
     };

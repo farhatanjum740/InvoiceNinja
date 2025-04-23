@@ -126,24 +126,28 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
   useEffect(() => {
     if (!invoiceItems.length) return;
 
-    // Calculate subtotal
+    // Calculate subtotal correctly from all items
     const calculatedSubtotal = invoiceItems.reduce(
-      (sum, item) => sum + item.amount,
+      (sum, item) => sum + parseFloat(typeof item.amount === 'string' ? item.amount : item.amount.toString()),
       0
     );
-    setSubtotal(calculatedSubtotal);
+    
+    // Ensure subtotal is properly rounded for display
+    const roundedSubtotal = parseFloat(calculatedSubtotal.toFixed(2));
+    setSubtotal(roundedSubtotal);
 
-    // Calculate GST based on customer shipping state
-    const gst = calculateGST(calculatedSubtotal, selectedCustomer, company);
+    // Calculate GST based on each item's specific GST rate and customer shipping state
+    const gst = calculateGST(invoiceItems, selectedCustomer, company);
     setGstTotals(gst);
 
-    // Calculate total
-    const calculatedTotal = calculatedSubtotal + gst.cgst + gst.sgst + gst.igst;
-    setTotal(calculatedTotal);
+    // Calculate total (subtotal + all taxes)
+    const calculatedTotal = roundedSubtotal + gst.cgst + gst.sgst + gst.igst;
+    const roundedTotal = parseFloat(calculatedTotal.toFixed(2));
+    setTotal(roundedTotal);
 
     // Update the complete invoice data for preview
     updateInvoiceData();
-  }, [invoiceItems, selectedCustomer]);
+  }, [invoiceItems, selectedCustomer, company]);
 
   // Update form data when customer changes
   const handleCustomerChange = (customerId: string) => {

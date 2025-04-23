@@ -3,53 +3,48 @@
  * - If customer state matches company state: Apply CGST + SGST
  * - If customer state differs from company state: Apply IGST
  * 
- * @param subtotal The subtotal amount of the invoice
+ * @param items The array of invoice items, each with quantity, rate, and gstRate
  * @param customer The customer details with billing state
  * @param company The company details with state
  * @returns Object containing cgst, sgst, and igst values
  */
 export function calculateGST(
-  subtotal: number,
+  items: any[],
   customer: any,
   company: any
 ): { cgst: number; sgst: number; igst: number } {
-  if (!customer || !company) {
+  if (!customer || !company || !items || !items.length) {
     return { cgst: 0, sgst: 0, igst: 0 };
   }
 
-  // Get GST rates from invoice items
-  const totalGstAmount = getTotalGSTAmount(subtotal);
+  // Calculate GST on an item-by-item basis based on their individual GST rates
+  let totalCGST = 0;
+  let totalSGST = 0;
+  let totalIGST = 0;
   
-  // Same state: CGST + SGST
-  if (customer.billingState === company.state) {
-    return {
-      cgst: totalGstAmount / 2,
-      sgst: totalGstAmount / 2,
-      igst: 0
-    };
-  } 
-  // Different state: IGST
-  else {
-    return {
-      cgst: 0,
-      sgst: 0,
-      igst: totalGstAmount
-    };
-  }
-}
-
-/**
- * Calculates the total GST amount based on subtotal
- * In a real application, this would be calculated from individual line items
- * Each with their own GST rate (5%, 12%, 18%, 28%)
- * 
- * @param subtotal The subtotal amount of the invoice
- * @returns The total GST amount
- */
-function getTotalGSTAmount(subtotal: number): number {
-  // For demo purposes, assuming 18% GST (common rate for services)
-  // In a real app, this would be calculated from individual line items
-  return subtotal * 0.18;
+  // Process each item to calculate GST correctly
+  items.forEach(item => {
+    const itemAmount = parseFloat(item.amount) || (parseFloat(item.quantity) * parseFloat(item.rate));
+    const gstRate = parseFloat(item.gstRate) || 0;
+    const gstAmount = itemAmount * (gstRate / 100);
+    
+    // Same state: CGST + SGST
+    if (customer.billingState === company.state) {
+      totalCGST += gstAmount / 2;
+      totalSGST += gstAmount / 2;
+    } 
+    // Different state: IGST
+    else {
+      totalIGST += gstAmount;
+    }
+  });
+  
+  // Round to 2 decimal places for currency
+  return {
+    cgst: parseFloat(totalCGST.toFixed(2)),
+    sgst: parseFloat(totalSGST.toFixed(2)), 
+    igst: parseFloat(totalIGST.toFixed(2))
+  };
 }
 
 /**
