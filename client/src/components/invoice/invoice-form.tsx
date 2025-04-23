@@ -6,7 +6,10 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { calculateGST } from "@/lib/utils/gst-calculations";
+import { formatCurrency } from "@/lib/utils/formatting";
 import { InvoiceItemForm } from "./invoice-item-form";
+import { InvoiceTemplateSelector } from "./invoice-template-selector";
+import { InvoiceTemplateRenderer } from "./invoice-template-renderer";
 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -62,6 +65,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
   const [gstTotals, setGstTotals] = useState({ cgst: 0, sgst: 0, igst: 0 });
   const [total, setTotal] = useState(0);
   const [isGeneratingInvoiceNumber, setIsGeneratingInvoiceNumber] = useState(true);
+  const [selectedTemplate, setSelectedTemplate] = useState("standard");
+  const [selectedColor, setSelectedColor] = useState("blue");
+  const [previewInvoiceData, setPreviewInvoiceData] = useState<any>(null);
 
   // Form definition
   const form = useForm<z.infer<typeof invoiceFormSchema>>({
@@ -170,13 +176,28 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         igst: gstTotals.igst,
         total,
         customerName: selectedCustomer?.name || "",
+        templateId: selectedTemplate,
+        colorTheme: selectedColor
       },
       items: invoiceItems,
       company,
       customer: selectedCustomer,
     };
     
+    setPreviewInvoiceData(completeInvoiceData);
     onDataChange(completeInvoiceData);
+  };
+  
+  // Handle template selection
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    updateInvoiceData();
+  };
+  
+  // Handle color selection
+  const handleColorSelect = (colorId: string) => {
+    setSelectedColor(colorId);
+    updateInvoiceData();
   };
 
   // Form submission handler
@@ -195,6 +216,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         ...values,
         invoiceDate: values.invoiceDate.toISOString(),
         dueDate: values.dueDate ? values.dueDate.toISOString() : null,
+        // Include template information for saving with the invoice
+        templateId: selectedTemplate,
+        colorTheme: selectedColor,
         // Convert all numeric values to strings for the database
         subtotal: subtotal.toString(),
         cgst: gstTotals.cgst.toString(),
@@ -610,13 +634,47 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
             </Card>
           </div>
 
+          {/* Invoice Template Preview */}
+          <Card className="mt-6">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-medium text-gray-700">Invoice Preview</h3>
+                <InvoiceTemplateSelector 
+                  selectedTemplate={selectedTemplate}
+                  selectedColor={selectedColor}
+                  onTemplateSelect={handleTemplateSelect}
+                  onColorSelect={handleColorSelect}
+                />
+              </div>
+              
+              <div className="mt-6 border rounded-lg overflow-hidden">
+                {previewInvoiceData ? (
+                  <InvoiceTemplateRenderer 
+                    templateId={selectedTemplate}
+                    colorTheme={selectedColor}
+                    invoice={previewInvoiceData.invoice}
+                    items={previewInvoiceData.items}
+                    company={previewInvoiceData.company}
+                    customer={previewInvoiceData.customer}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-96 bg-gray-50">
+                    <p className="text-gray-500">
+                      Fill in invoice details and add items to preview
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          
           <div className="flex justify-end space-x-3 mt-6">
             <Button
               type="button"
               variant="outline"
               onClick={updateInvoiceData}
             >
-              Preview Invoice
+              Refresh Preview
             </Button>
             <Button
               type="submit"
