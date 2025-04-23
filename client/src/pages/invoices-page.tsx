@@ -217,13 +217,31 @@ export default function InvoicesPage() {
                                   {getStatusBadge(invoice.status)}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => handleViewInvoice(invoice.id)}
+                                    title="View"
+                                  >
                                     <EyeIcon className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => handleEditInvoice(invoice.id)}
+                                    title="Edit"
+                                  >
                                     <PencilIcon className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => handleDownloadInvoice(invoice.id)}
+                                    title="Download"
+                                  >
                                     <DownloadIcon className="h-4 w-4" />
                                   </Button>
                                   <AlertDialog>

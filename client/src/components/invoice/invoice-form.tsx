@@ -106,11 +106,10 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     },
     onSuccess: (data) => {
       console.log("Invoice created successfully:", data);
-      toast({
-        title: "Invoice created",
-        description: "Your invoice has been created successfully.",
-      });
-      onSuccess();
+      // We'll let the parent component handle the success toast and navigation
+      if (onSuccess) {
+        onSuccess();
+      }
     },
     onError: (error) => {
       console.error("Error creating invoice:", error);
@@ -124,28 +123,36 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
 
   // Calculate totals whenever invoice items change
   useEffect(() => {
-    if (!invoiceItems.length) return;
+    // Even when there are no invoice items, we need to update the invoice data 
+    // to show an empty invoice in the preview
 
-    // Calculate subtotal correctly from all items
-    const calculatedSubtotal = invoiceItems.reduce(
-      (sum, item) => sum + parseFloat(typeof item.amount === 'string' ? item.amount : item.amount.toString()),
-      0
-    );
-    
-    // Ensure subtotal is properly rounded for display
-    const roundedSubtotal = parseFloat(calculatedSubtotal.toFixed(2));
-    setSubtotal(roundedSubtotal);
+    if (invoiceItems.length) {
+      // Calculate subtotal correctly from all items
+      const calculatedSubtotal = invoiceItems.reduce(
+        (sum, item) => sum + parseFloat(typeof item.amount === 'string' ? item.amount : item.amount.toString()),
+        0
+      );
+      
+      // Ensure subtotal is properly rounded for display
+      const roundedSubtotal = parseFloat(calculatedSubtotal.toFixed(2));
+      setSubtotal(roundedSubtotal);
 
-    // Calculate GST based on each item's specific GST rate and customer shipping state
-    const gst = calculateGST(invoiceItems, selectedCustomer, company);
-    setGstTotals(gst);
+      // Calculate GST based on each item's specific GST rate and customer shipping state
+      const gst = calculateGST(invoiceItems, selectedCustomer, company);
+      setGstTotals(gst);
 
-    // Calculate total (subtotal + all taxes)
-    const calculatedTotal = roundedSubtotal + gst.cgst + gst.sgst + gst.igst;
-    const roundedTotal = parseFloat(calculatedTotal.toFixed(2));
-    setTotal(roundedTotal);
+      // Calculate total (subtotal + all taxes)
+      const calculatedTotal = roundedSubtotal + gst.cgst + gst.sgst + gst.igst;
+      const roundedTotal = parseFloat(calculatedTotal.toFixed(2));
+      setTotal(roundedTotal);
+    } else {
+      // Set default values for an empty invoice
+      setSubtotal(0);
+      setGstTotals({ cgst: 0, sgst: 0, igst: 0 });
+      setTotal(0);
+    }
 
-    // Update the complete invoice data for preview
+    // Always update the invoice data for preview regardless of item count
     updateInvoiceData();
   }, [invoiceItems, selectedCustomer, company]);
 
