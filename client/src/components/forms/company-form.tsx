@@ -72,6 +72,19 @@ export function CompanyForm({ company, section = 'details', onSuccess }: Company
     defaultValues: company
       ? {
           ...company,
+          // Convert any null values to empty strings to fix type issues
+          name: company.name || "",
+          gstin: company.gstin || "",
+          address: company.address || "",
+          city: company.city || "",
+          state: company.state || "",
+          pincode: company.pincode || "",
+          email: company.email || "",
+          phone: company.phone || "",
+          bankName: company.bankName || "",
+          accountNumber: company.accountNumber || "",
+          ifscCode: company.ifscCode || "",
+          logo: company.logo || "",
           userId: user?.id,
         }
       : {

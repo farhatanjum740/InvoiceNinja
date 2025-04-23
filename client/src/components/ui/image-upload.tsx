@@ -6,7 +6,7 @@ import imageCompression from 'browser-image-compression';
 
 interface ImageUploadProps {
   onChange: (value: string) => void;
-  value?: string;
+  value?: string | null | undefined;
   className?: string;
 }
 
@@ -24,9 +24,10 @@ export function ImageUpload({ onChange, value, className }: ImageUploadProps) {
 
       // Options for image compression
       const options = {
-        maxSizeMB: 0.5, // Max file size in MB
-        maxWidthOrHeight: 300, // Max width/height in pixels
+        maxSizeMB: 0.2, // Max file size in MB (reduced to 200KB)
+        maxWidthOrHeight: 200, // Max width/height in pixels (reduced to 200px)
         useWebWorker: true,
+        initialQuality: 0.7, // Reduce initial quality for better compression
       };
 
       // Compress the image
@@ -94,7 +95,7 @@ export function ImageUpload({ onChange, value, className }: ImageUploadProps) {
         >
           <Upload className="h-10 w-10 text-gray-400 mb-2" />
           <p className="text-sm text-gray-500">Click to upload your company logo</p>
-          <p className="text-xs text-gray-400 mt-1">PNG, JPG, GIF up to 5MB</p>
+          <p className="text-xs text-gray-400 mt-1">PNG, JPG, GIF (will be compressed)</p>
         </div>
       )}
 
