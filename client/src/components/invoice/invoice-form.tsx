@@ -194,14 +194,21 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
       invoice: {
         ...values,
         invoiceDate: values.invoiceDate.toISOString(),
-        dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
-        subtotal,
-        cgst: gstTotals.cgst,
-        sgst: gstTotals.sgst,
-        igst: gstTotals.igst,
-        total
+        dueDate: values.dueDate ? values.dueDate.toISOString() : null,
+        // Convert all numeric values to strings for the database
+        subtotal: subtotal.toString(),
+        cgst: gstTotals.cgst.toString(),
+        sgst: gstTotals.sgst.toString(), 
+        igst: gstTotals.igst.toString(),
+        total: total.toString()
       },
-      items: invoiceItems
+      items: invoiceItems.map(item => ({
+        ...item,
+        // Convert the numeric values to strings for each item
+        quantity: item.quantity.toString(),
+        rate: item.rate.toString(),
+        amount: item.amount.toString()
+      }))
     };
 
     createInvoiceMutation.mutate(invoiceData);
