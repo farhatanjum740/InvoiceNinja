@@ -96,6 +96,8 @@ export const invoices = pgTable("invoices", {
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
   termsAndConditions: text("terms_and_conditions"),
+  templateId: text("template_id").default("standard"),
+  colorTheme: text("color_theme").default("blue"),
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
