@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 // Indian states for the dropdown
 const INDIAN_STATES = [
@@ -173,11 +174,14 @@ export function CompanyForm({ company, section = 'details', onSuccess }: Company
                 name="logo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Logo URL</FormLabel>
+                    <FormLabel>Company Logo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter logo URL (optional)" {...field} />
+                      <ImageUpload 
+                        value={field.value} 
+                        onChange={field.onChange} 
+                      />
                     </FormControl>
-                    <FormDescription>URL to your company logo</FormDescription>
+                    <FormDescription>Upload your company logo (will be resized automatically)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
