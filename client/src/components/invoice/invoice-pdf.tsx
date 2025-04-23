@@ -21,28 +21,41 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
     try {
       const invoiceElement = invoiceRef.current;
       
-      // Scale up for better quality
+      // Use moderate scale for reasonable file size (reduced from 2 to 1.5)
       const canvas = await html2canvas(invoiceElement, {
-        scale: 2, 
+        scale: 1.2, 
         logging: false,
         useCORS: true,
+        // Use image smoothing for better quality at lower scale
+        imageTimeout: 2000,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
       });
       
-      const imgData = canvas.toDataURL("image/png");
+      // Use JPEG format with moderate quality for smaller file size
+      const imgData = canvas.toDataURL("image/jpeg", 0.8);
       
       // A4 dimensions in mm: 210 x 297
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
+        compress: true, // Enable compression
       });
       
       const imgWidth = 210;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
-      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+      // Add compression options to reduce file size
+      const options = {
+        compression: 'FAST', // Use faster compression
+        format: 'JPEG', // Use JPEG for image data
+        imageQuality: 0.8,  // Lower quality = smaller file
+      };
       
-      // Add multiple pages if invoice is long
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+      
+      // Add multiple pages if invoice is long with optimized approach
       if (imgHeight > 297) {
         let heightLeft = imgHeight - 297;
         let position = -297;
@@ -50,7 +63,7 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
         while (heightLeft > 0) {
           pdf.addPage();
           position = position - 297;
-          pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
           heightLeft -= 297;
         }
       }
@@ -93,19 +106,21 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       </div>
       
       {/* Invoice Template for PDF generation */}
-      <div 
-        ref={invoiceRef} 
-        className="bg-white p-0 overflow-hidden"
-        style={{ width: "100%" }}
-      >
-        <InvoiceTemplateRenderer 
-          templateId={invoice.invoice.templateId || "standard"}
-          colorTheme={invoice.invoice.colorTheme || "blue"}
-          invoice={invoice.invoice}
-          items={invoice.items}
-          company={invoice.company}
-          customer={invoice.customer}
-        />
+      <div className="max-w-4xl mx-auto shadow-lg rounded-lg">
+        <div 
+          ref={invoiceRef} 
+          className="bg-white p-0 overflow-hidden rounded-lg"
+          style={{ width: "100%" }}
+        >
+          <InvoiceTemplateRenderer 
+            templateId={invoice.invoice.templateId || "standard"}
+            colorTheme={invoice.invoice.colorTheme || "blue"}
+            invoice={invoice.invoice}
+            items={invoice.items}
+            company={invoice.company}
+            customer={invoice.customer}
+          />
+        </div>
       </div>
     </div>
   );

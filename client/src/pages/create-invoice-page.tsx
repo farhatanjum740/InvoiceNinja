@@ -18,6 +18,9 @@ export default function CreateInvoicePage() {
   const [isPreviewReady, setIsPreviewReady] = useState(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  
+  // Preserve form state between tab switches
+  const [formKey] = useState(() => Math.random().toString(36).substring(7));
 
   // Check if company exists before allowing invoice creation
   const { data: company, isLoading: isLoadingCompany } = useQuery({
@@ -38,7 +41,25 @@ export default function CreateInvoicePage() {
   const handleInvoiceDataChange = (data: any) => {
     setInvoiceData(data);
     setIsPreviewReady(true);
+    // Store the form data in localStorage as a backup
+    if (data) {
+      localStorage.setItem('invoice-draft', JSON.stringify(data));
+    }
   };
+  
+  // Load saved draft if available on initial render
+  useEffect(() => {
+    const savedDraft = localStorage.getItem('invoice-draft');
+    if (savedDraft) {
+      try {
+        const parsedData = JSON.parse(savedDraft);
+        setInvoiceData(parsedData);
+        setIsPreviewReady(true);
+      } catch (e) {
+        console.error("Error parsing saved invoice draft:", e);
+      }
+    }
+  }, []);
 
   // Function to handle successful invoice creation
   const handleInvoiceSuccess = () => {
@@ -46,6 +67,8 @@ export default function CreateInvoicePage() {
       title: "Invoice created",
       description: "Your invoice has been created successfully.",
     });
+    // Clear the draft after successful creation
+    localStorage.removeItem('invoice-draft');
     navigate("/invoices");
   };
 
