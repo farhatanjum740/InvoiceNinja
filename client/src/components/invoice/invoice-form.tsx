@@ -92,10 +92,14 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
   // Create invoice mutation
   const createInvoiceMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log("Submitting invoice data:", data);
       const response = await apiRequest("POST", "/api/invoices", data);
-      return await response.json();
+      const result = await response.json();
+      console.log("Response from server:", result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Invoice created successfully:", data);
       toast({
         title: "Invoice created",
         description: "Your invoice has been created successfully.",
@@ -103,6 +107,7 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
       onSuccess();
     },
     onError: (error) => {
+      console.error("Error creating invoice:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create invoice. Please try again.",
