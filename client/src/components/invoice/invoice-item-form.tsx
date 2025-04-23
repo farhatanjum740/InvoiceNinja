@@ -58,7 +58,7 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
   const form = useForm<z.infer<typeof invoiceItemFormSchema>>({
     resolver: zodResolver(invoiceItemFormSchema),
     defaultValues: {
-      productId: "",
+      productId: "custom", // Set default to "custom" instead of empty string
       description: "",
       hsnCode: "",
       unit: "Piece",
@@ -75,7 +75,15 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
 
   // Handle product selection
   const handleProductChange = (productId: string) => {
-    if (!productId) return;
+    if (!productId || productId === "custom") {
+      // Reset the form fields if "Custom Item" is selected
+      form.setValue("description", "");
+      form.setValue("hsnCode", "");
+      form.setValue("unit", "Piece");
+      form.setValue("rate", 0);
+      form.setValue("gstRate", 18);
+      return;
+    }
 
     const product = products?.find(p => p.id.toString() === productId);
     if (product) {
@@ -93,7 +101,8 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
     const itemData = {
       ...values,
       amount: parseFloat((values.quantity * values.rate).toFixed(2)),
-      productId: values.productId ? parseInt(values.productId) : undefined
+      // Only set productId if it's a real product (not "custom")
+      productId: values.productId && values.productId !== "custom" ? parseInt(values.productId) : undefined
     };
 
     onAddItem(itemData);
@@ -133,7 +142,7 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Custom Item</SelectItem>
+                        <SelectItem value="custom">Custom Item</SelectItem>
                         {products.map((product) => (
                           <SelectItem key={product.id} value={product.id.toString()}>
                             {product.name} - {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(product.rate)}
@@ -242,7 +251,8 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
                         step="0.01"
                         placeholder="Enter rate"
                         {...field}
-                        onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                        value={field.value}
+                        onChange={(e) => field.onChange(e.target.value)}
                       />
                     </FormControl>
                     <FormMessage />
