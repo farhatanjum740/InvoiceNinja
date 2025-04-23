@@ -360,12 +360,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate invoice data and ensure no undefined values
       // Provide defaults for optional fields
+      // Convert invoiceDate and dueDate from string to Date objects if they're strings
       const invoiceWithDefaults = {
         ...invoiceData,
         userId: req.user!.id,
         status: invoiceData.status || "pending",
-        invoiceDate: invoiceData.invoiceDate || new Date(),
-        dueDate: invoiceData.dueDate || null,
+        invoiceDate: typeof invoiceData.invoiceDate === 'string' 
+          ? new Date(invoiceData.invoiceDate) 
+          : (invoiceData.invoiceDate || new Date()),
+        dueDate: invoiceData.dueDate 
+          ? (typeof invoiceData.dueDate === 'string' ? new Date(invoiceData.dueDate) : invoiceData.dueDate) 
+          : null,
         notes: invoiceData.notes || null,
         cgst: invoiceData.cgst || null,
         sgst: invoiceData.sgst || null,

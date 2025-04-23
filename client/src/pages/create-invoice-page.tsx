@@ -89,7 +89,7 @@ export default function CreateInvoicePage() {
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="edit">
+                <TabsContent value="edit" className="relative">
                   <Card>
                     <CardHeader>
                       <CardTitle>Invoice Details</CardTitle>
@@ -107,7 +107,15 @@ export default function CreateInvoicePage() {
                   </Card>
                 </TabsContent>
 
-                <TabsContent value="preview">
+                <TabsContent value="preview" className="relative">
+                  <div className="absolute top-4 right-4 z-10">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setActiveTab("edit")}
+                    >
+                      Back to Edit
+                    </Button>
+                  </div>
                   <Card>
                     <CardHeader>
                       <CardTitle>Invoice Preview</CardTitle>
