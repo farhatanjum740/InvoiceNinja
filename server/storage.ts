@@ -174,7 +174,7 @@ export class DatabaseStorage implements IStorage {
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
     return db.select().from(invoices)
       .where(eq(invoices.userId, userId))
-      .orderBy(desc(invoices.createdAt));
+      .orderBy(desc(invoices.id));  // Using ID instead of createdAt which doesn't exist
   }
 
   async getInvoice(id: number): Promise<Invoice | undefined> {
@@ -274,37 +274,28 @@ export class DatabaseStorage implements IStorage {
     totalCustomers: number;
   }> {
     // Get total number of invoices
-    const [invoiceCount] = await db
-      .select({ count: db.fn.count() })
+    const invoicesResult = await db
+      .select()
       .from(invoices)
       .where(eq(invoices.userId, userId));
     
-    // Calculate total revenue (sum of all invoice totals)
-    const [revenueResult] = await db
-      .select({ sum: db.fn.sum(invoices.total) })
-      .from(invoices)
-      .where(eq(invoices.userId, userId));
+    // Calculate total revenue
+    const totalRevenue = invoicesResult.reduce((sum, invoice) => sum + Number(invoice.total), 0);
     
-    // Count unpaid invoices (status is not 'paid')
-    const [unpaidCount] = await db
-      .select({ count: db.fn.count() })
-      .from(invoices)
-      .where(and(
-        eq(invoices.userId, userId),
-        eq(invoices.status, 'pending')
-      ));
+    // Count unpaid invoices (status is pending)
+    const unpaidInvoices = invoicesResult.filter(invoice => invoice.status === 'pending').length;
     
     // Count total customers
-    const [customerCount] = await db
-      .select({ count: db.fn.count() })
+    const customersResult = await db
+      .select()
       .from(customers)
       .where(eq(customers.userId, userId));
     
     return {
-      totalInvoices: Number(invoiceCount?.count || 0),
-      totalRevenue: Number(revenueResult?.sum || 0),
-      unpaidInvoices: Number(unpaidCount?.count || 0),
-      totalCustomers: Number(customerCount?.count || 0)
+      totalInvoices: invoicesResult.length,
+      totalRevenue: totalRevenue,
+      unpaidInvoices: unpaidInvoices,
+      totalCustomers: customersResult.length
     };
   }
 }
