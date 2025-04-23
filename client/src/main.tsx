@@ -10,6 +10,7 @@ import ProductsPage from "@/pages/products-page";
 import ReportsPage from "@/pages/reports-page";
 import CompanyPage from "@/pages/company-page";
 import CreateInvoicePage from "@/pages/create-invoice-page";
+import LandingPageNew from "@/pages/landing-page-new";
 import { ProtectedRoute } from "./lib/protected-route";
 import { Providers } from "./providers";
 import "./index.css";
@@ -19,8 +20,12 @@ function App() {
   return (
     <>
       <Switch>
+        {/* Public routes */}
+        <Route path="/" component={LandingPageNew} />
         <Route path="/auth" component={AuthPage} />
-        <ProtectedRoute path="/" component={DashboardPage} />
+        
+        {/* Protected routes */}
+        <ProtectedRoute path="/dashboard" component={DashboardPage} />
         <ProtectedRoute path="/invoices" component={InvoicesPage} />
         <ProtectedRoute path="/invoices/create" component={CreateInvoicePage} />
         <ProtectedRoute path="/invoices/new" component={CreateInvoicePage} />

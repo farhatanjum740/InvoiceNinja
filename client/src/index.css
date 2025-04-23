@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Temporary flag to control initial route */
+:root {
+  --initial-route: "landing";
+}
+
 @layer base {
   * {
     @apply border-border;
