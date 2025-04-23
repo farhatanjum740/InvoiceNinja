@@ -82,6 +82,46 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     },
   });
 
+  // Load saved form state if available
+  useEffect(() => {
+    const savedFormState = localStorage.getItem('invoice-form-state');
+    if (savedFormState) {
+      try {
+        const parsedState = JSON.parse(savedFormState);
+        
+        // Restore form values - need to handle dates specially
+        if (parsedState.formValues) {
+          // Convert string dates back to Date objects
+          const formValues = {...parsedState.formValues};
+          if (formValues.invoiceDate) {
+            formValues.invoiceDate = new Date(formValues.invoiceDate);
+          }
+          if (formValues.dueDate) {
+            formValues.dueDate = new Date(formValues.dueDate);
+          }
+          // Set the form values
+          Object.entries(formValues).forEach(([key, value]) => {
+            form.setValue(key as any, value);
+          });
+        }
+        
+        // Restore other state values
+        if (parsedState.invoiceItems) setInvoiceItems(parsedState.invoiceItems);
+        if (parsedState.selectedCustomer) setSelectedCustomer(parsedState.selectedCustomer);
+        if (parsedState.selectedTemplate) setSelectedTemplate(parsedState.selectedTemplate);
+        if (parsedState.selectedColor) setSelectedColor(parsedState.selectedColor);
+        if (parsedState.subtotal) setSubtotal(parsedState.subtotal);
+        if (parsedState.gstTotals) setGstTotals(parsedState.gstTotals);
+        if (parsedState.total) setTotal(parsedState.total);
+        
+        // Mark that we've already loaded a draft
+        setIsGeneratingInvoiceNumber(false);
+      } catch (e) {
+        console.error("Error parsing saved form state:", e);
+      }
+    }
+  }, []);
+
   // Generate a new invoice number
   useEffect(() => {
     if (isGeneratingInvoiceNumber) {
@@ -106,6 +146,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     },
     onSuccess: (data) => {
       console.log("Invoice created successfully:", data);
+      // Clear the form state in localStorage
+      localStorage.removeItem('invoice-form-state');
+      
       // We'll let the parent component handle the success toast and navigation
       if (onSuccess) {
         onSuccess();
@@ -156,22 +199,49 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     updateInvoiceData();
   }, [invoiceItems, selectedCustomer, company]);
 
+  // Save form state to localStorage
+  const saveFormState = () => {
+    const formData = {
+      formValues: form.getValues(),
+      invoiceItems,
+      selectedCustomer,
+      selectedTemplate,
+      selectedColor,
+      subtotal,
+      gstTotals,
+      total
+    };
+    localStorage.setItem('invoice-form-state', JSON.stringify(formData));
+  };
+
   // Update form data when customer changes
   const handleCustomerChange = (customerId: string) => {
     const id = parseInt(customerId);
     form.setValue("customerId", id);
     const customer = customers?.find(c => c.id === id);
     setSelectedCustomer(customer);
+    // Save form state after customer change
+    setTimeout(saveFormState, 0);
   };
 
   // Add a new invoice item
   const addInvoiceItem = (itemData: any) => {
-    setInvoiceItems([...invoiceItems, itemData]);
+    const newItems = [...invoiceItems, itemData];
+    setInvoiceItems(newItems);
+    // Save form state after adding item
+    setTimeout(() => {
+      saveFormState();
+    }, 0);
   };
 
   // Remove an invoice item
   const removeInvoiceItem = (index: number) => {
-    setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
+    const newItems = invoiceItems.filter((_, i) => i !== index);
+    setInvoiceItems(newItems);
+    // Save form state after removing item
+    setTimeout(() => {
+      saveFormState();
+    }, 0);
   };
 
   // Update the complete invoice data for preview

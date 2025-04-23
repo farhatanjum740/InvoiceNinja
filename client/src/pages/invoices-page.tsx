@@ -25,7 +25,7 @@ export default function InvoicesPage() {
   const [invoiceToDelete, setInvoiceToDelete] = useState<number | null>(null);
   const { toast } = useToast();
 
-  const { data: invoices = [], isLoading } = useQuery({
+  const { data: invoices = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/invoices"],
   });
 

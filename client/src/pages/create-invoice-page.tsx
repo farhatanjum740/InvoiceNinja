@@ -25,12 +25,12 @@ export default function CreateInvoicePage() {
   });
 
   // Fetch customers for the form
-  const { data: customers = [], isLoading: isLoadingCustomers } = useQuery({
+  const { data: customers = [], isLoading: isLoadingCustomers } = useQuery<any[]>({
     queryKey: ["/api/customers"],
   });
 
   // Fetch products for the form
-  const { data: products = [], isLoading: isLoadingProducts } = useQuery({
+  const { data: products = [], isLoading: isLoadingProducts } = useQuery<any[]>({
     queryKey: ["/api/products"],
   });
 
