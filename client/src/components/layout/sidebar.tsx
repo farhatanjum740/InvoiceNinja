@@ -21,7 +21,7 @@ export function Sidebar({ className }: SidebarProps) {
   const routes = [
     {
       title: "Dashboard",
-      href: "/",
+      href: "/dashboard",
       icon: BarChart3,
     },
     {
@@ -57,8 +57,8 @@ export function Sidebar({ className }: SidebarProps) {
   ];
 
   const isActive = (path: string) => {
-    if (path === "/" && location === "/") return true;
-    if (path !== "/" && location.startsWith(path)) return true;
+    if (path === "/dashboard" && location === "/dashboard") return true;
+    if (path !== "/dashboard" && location.startsWith(path)) return true;
     return false;
   };
 
