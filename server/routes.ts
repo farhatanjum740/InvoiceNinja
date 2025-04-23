@@ -289,9 +289,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Invoice routes
   app.get("/api/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    if (!req.isAuthenticated()) {
+      console.log("User not authenticated when getting invoices");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     
+    console.log(`Fetching invoices for user ${req.user!.id}`);
     const invoices = await storage.getInvoicesByUserId(req.user!.id);
+    console.log(`Returning ${invoices.length} invoices to client`);
     res.json(invoices);
   });
   
@@ -320,7 +325,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     
     try {
+      console.log("Received invoice request body:", req.body);
       const { invoice: invoiceData, items: itemsData } = req.body;
+      
+      console.log("Extracted invoice data:", invoiceData);
+      console.log("Extracted items data:", itemsData);
       
       // Validate invoice data
       const validatedInvoice = insertInvoiceSchema.parse({
@@ -328,22 +337,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user!.id
       });
       
+      console.log("Validated invoice data:", validatedInvoice);
+      
       // Validate invoice items
       const validatedItems = itemsData.map((item: any) => 
         insertInvoiceItemSchema.omit({ invoiceId: true }).parse(item)
       );
       
+      console.log("Validated items data:", validatedItems);
+      
       // Check if customer belongs to user
       const customer = await storage.getCustomer(validatedInvoice.customerId);
       if (!customer || customer.userId !== req.user!.id) {
+        console.log("Customer not found or doesn't belong to user:", validatedInvoice.customerId);
         return res.status(404).json({ message: "Customer not found" });
       }
+      
+      console.log("Customer verification passed, creating invoice");
       
       // Create invoice with items
       const invoice = await storage.createInvoice(validatedInvoice, validatedItems);
       
+      console.log("Invoice created:", invoice);
+      
       // Get complete invoice with items
       const completeInvoice = await storage.getInvoiceWithItems(invoice.id);
+      
+      console.log("Complete invoice with items:", completeInvoice);
       
       res.status(201).json(completeInvoice);
     } catch (error) {
@@ -474,8 +494,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate item data
       const itemData = insertInvoiceItemSchema.partial().parse(req.body);
       
-      // Get the item
-      const existingItem = await storage.invoiceItems.get(id);
+      // Get the item from invoice items
+      const items = await storage.getInvoiceItems(0); // Get all items then filter
+      const existingItem = items.find(item => item.id === id);
       if (!existingItem) {
         return res.status(404).json({ message: "Item not found" });
       }
@@ -512,8 +533,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ message: "Invalid item ID" });
     }
     
-    // Get the item
-    const existingItem = await storage.invoiceItems.get(id);
+    // Get the item from invoice items
+    const items = await storage.getInvoiceItems(0); // Get all items and filter by id
+    const existingItem = items.find(item => item.id === id);
     if (!existingItem) {
       return res.status(404).json({ message: "Item not found" });
     }

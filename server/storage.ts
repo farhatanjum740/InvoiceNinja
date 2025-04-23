@@ -205,9 +205,16 @@ export class MemStorage implements IStorage {
   
   // Invoice Management
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
-    return Array.from(this.invoices.values()).filter(
+    console.log(`Getting invoices for user ${userId}`);
+    console.log(`Total invoices in storage: ${this.invoices.size}`);
+    console.log("All invoices:", Array.from(this.invoices.values()));
+    
+    const invoices = Array.from(this.invoices.values()).filter(
       (invoice) => invoice.userId === userId
     );
+    
+    console.log(`Found ${invoices.length} invoices for user ${userId}:`, invoices);
+    return invoices;
   }
 
   async getInvoice(id: number): Promise<Invoice | undefined> {

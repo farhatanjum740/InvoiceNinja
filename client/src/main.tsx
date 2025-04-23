@@ -22,6 +22,7 @@ function App() {
         <Route path="/auth" component={AuthPage} />
         <ProtectedRoute path="/" component={DashboardPage} />
         <ProtectedRoute path="/invoices" component={InvoicesPage} />
+        <ProtectedRoute path="/invoices/create" component={CreateInvoicePage} />
         <ProtectedRoute path="/invoices/new" component={CreateInvoicePage} />
         <ProtectedRoute path="/customers" component={CustomersPage} />
         <ProtectedRoute path="/products" component={ProductsPage} />
