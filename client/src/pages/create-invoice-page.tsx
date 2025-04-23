@@ -3,7 +3,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PersistentTabs } from "@/components/ui/persistent-tabs";
 import { InvoiceForm } from "@/components/invoice/invoice-form";
 import { InvoicePdf } from "@/components/invoice/invoice-pdf";
 import { useQuery } from "@tanstack/react-query";
@@ -18,9 +18,6 @@ export default function CreateInvoicePage() {
   const [isPreviewReady, setIsPreviewReady] = useState(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  
-  // Preserve form state between tab switches
-  const [formKey] = useState(() => Math.random().toString(36).substring(7));
 
   // Check if company exists before allowing invoice creation
   const { data: company, isLoading: isLoadingCompany } = useQuery({
@@ -104,33 +101,33 @@ export default function CreateInvoicePage() {
                 </AlertDescription>
               </Alert>
             ) : (
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="edit">Edit Invoice</TabsTrigger>
-                  <TabsTrigger value="preview" disabled={!isPreviewReady}>
-                    Preview
-                  </TabsTrigger>
-                </TabsList>
+              <PersistentTabs 
+                defaultValue="edit"
+                values={["edit", "preview"]}
+                triggerLabels={["Edit Invoice", isPreviewReady ? "Preview" : "Preview (disabled)"]}
+                onValueChange={setActiveTab}
+                className="w-full"
+                triggerClassName="mb-6"
+              >
+                {/* Edit Tab - Always mounted */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Invoice Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <InvoiceForm
+                      company={company}
+                      customers={customers}
+                      products={products}
+                      isLoading={isLoadingCompany || isLoadingCustomers || isLoadingProducts}
+                      onDataChange={handleInvoiceDataChange}
+                      onSuccess={handleInvoiceSuccess}
+                    />
+                  </CardContent>
+                </Card>
 
-                <TabsContent value="edit" className="relative">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Invoice Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <InvoiceForm
-                        company={company}
-                        customers={customers}
-                        products={products}
-                        isLoading={isLoadingCompany || isLoadingCustomers || isLoadingProducts}
-                        onDataChange={handleInvoiceDataChange}
-                        onSuccess={handleInvoiceSuccess}
-                      />
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="preview" className="relative">
+                {/* Preview Tab - Always mounted */}
+                <Card>
                   <div className="absolute top-4 right-4 z-10">
                     <Button 
                       variant="outline" 
@@ -139,22 +136,20 @@ export default function CreateInvoicePage() {
                       Back to Edit
                     </Button>
                   </div>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Invoice Preview</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {invoiceData ? (
-                        <InvoicePdf invoice={invoiceData} />
-                      ) : (
-                        <div className="text-center py-12 text-gray-500">
-                          Complete the invoice form to see a preview
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
+                  <CardHeader>
+                    <CardTitle>Invoice Preview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {invoiceData ? (
+                      <InvoicePdf invoice={invoiceData} />
+                    ) : (
+                      <div className="text-center py-12 text-gray-500">
+                        Complete the invoice form to see a preview
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </PersistentTabs>
             )}
           </div>
         </main>
