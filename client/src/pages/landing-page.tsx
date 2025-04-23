@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { BannerAd, InContentAd } from "@/components/ui/adsense";
 
 export default function LandingPage() {
   return (
@@ -20,6 +21,11 @@ export default function LandingPage() {
           </div>
         </div>
       </nav>
+      
+      {/* Banner Ad */}
+      <div className="container mx-auto">
+        <BannerAd client="ca-pub-xxxxxxxxxxxxxxxx" slot="xxxxxxxxxx" />
+      </div>
 
       {/* Hero Section */}
       <section className="container mx-auto px-6 py-16 text-center">
@@ -110,6 +116,11 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* In-content Ad */}
+      <div className="container mx-auto">
+        <InContentAd client="ca-pub-xxxxxxxxxxxxxxxx" slot="xxxxxxxxxx" />
+      </div>
+      
       {/* Testimonials */}
       <section className="container mx-auto px-6 py-16">
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">

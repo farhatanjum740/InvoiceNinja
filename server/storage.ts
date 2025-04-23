@@ -1,9 +1,13 @@
 import { users, type User, type InsertUser, companies, type Company, type InsertCompany, customers, type Customer, type InsertCustomer, products, type Product, type InsertProduct, invoices, type Invoice, type InsertInvoice, invoiceItems, type InvoiceItem, type InsertInvoiceItem } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, desc } from "drizzle-orm";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
+// Interface for storage operations
 export interface IStorage {
   // User management
   getUser(id: number): Promise<User | undefined>;
@@ -53,300 +57,256 @@ export interface IStorage {
   }>;
   
   // Session store for authentication
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private companies: Map<number, Company>;
-  private customers: Map<number, Customer>;
-  private products: Map<number, Product>;
-  private invoices: Map<number, Invoice>;
-  private invoiceItems: Map<number, InvoiceItem>;
-  
-  sessionStore: session.SessionStore;
-  
-  private userIdCounter: number;
-  private companyIdCounter: number;
-  private customerIdCounter: number;
-  private productIdCounter: number;
-  private invoiceIdCounter: number;
-  private invoiceItemIdCounter: number;
+export class DatabaseStorage implements IStorage {
+  sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.companies = new Map();
-    this.customers = new Map();
-    this.products = new Map();
-    this.invoices = new Map();
-    this.invoiceItems = new Map();
-    
-    this.userIdCounter = 1;
-    this.companyIdCounter = 1;
-    this.customerIdCounter = 1;
-    this.productIdCounter = 1;
-    this.invoiceIdCounter = 1;
-    this.invoiceItemIdCounter = 1;
-    
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000 // 24 hours
+    this.sessionStore = new PostgresSessionStore({ 
+      pool, 
+      createTableIfMissing: true 
     });
   }
 
-  // User Management
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username.toLowerCase() === username.toLowerCase()
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
-  
+
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email.toLowerCase() === email.toLowerCase()
-    );
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userIdCounter++;
-    const createdAt = new Date();
-    const user: User = { ...insertUser, id, createdAt };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
-  
-  // Company Management
+
   async getCompanyByUserId(userId: number): Promise<Company | undefined> {
-    return Array.from(this.companies.values()).find(
-      (company) => company.userId === userId
-    );
+    const [company] = await db.select().from(companies).where(eq(companies.userId, userId));
+    return company;
   }
 
   async createCompany(company: InsertCompany): Promise<Company> {
-    const id = this.companyIdCounter++;
-    const newCompany: Company = { ...company, id };
-    this.companies.set(id, newCompany);
+    const [newCompany] = await db.insert(companies).values(company).returning();
     return newCompany;
   }
 
   async updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company | undefined> {
-    const existingCompany = this.companies.get(id);
-    if (!existingCompany) return undefined;
-    
-    const updatedCompany = { ...existingCompany, ...company };
-    this.companies.set(id, updatedCompany);
+    const [updatedCompany] = await db
+      .update(companies)
+      .set(company)
+      .where(eq(companies.id, id))
+      .returning();
     return updatedCompany;
   }
-  
-  // Customer Management
+
   async getCustomersByUserId(userId: number): Promise<Customer[]> {
-    return Array.from(this.customers.values()).filter(
-      (customer) => customer.userId === userId
-    );
+    return db.select().from(customers).where(eq(customers.userId, userId));
   }
 
   async getCustomer(id: number): Promise<Customer | undefined> {
-    return this.customers.get(id);
+    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+    return customer;
   }
 
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
-    const id = this.customerIdCounter++;
-    const newCustomer: Customer = { ...customer, id };
-    this.customers.set(id, newCustomer);
+    const [newCustomer] = await db.insert(customers).values(customer).returning();
     return newCustomer;
   }
 
   async updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined> {
-    const existingCustomer = this.customers.get(id);
-    if (!existingCustomer) return undefined;
-    
-    const updatedCustomer = { ...existingCustomer, ...customer };
-    this.customers.set(id, updatedCustomer);
+    const [updatedCustomer] = await db
+      .update(customers)
+      .set(customer)
+      .where(eq(customers.id, id))
+      .returning();
     return updatedCustomer;
   }
 
   async deleteCustomer(id: number): Promise<boolean> {
-    return this.customers.delete(id);
+    const [deletedCustomer] = await db
+      .delete(customers)
+      .where(eq(customers.id, id))
+      .returning();
+    return !!deletedCustomer;
   }
-  
-  // Product Management
+
   async getProductsByUserId(userId: number): Promise<Product[]> {
-    return Array.from(this.products.values()).filter(
-      (product) => product.userId === userId
-    );
+    return db.select().from(products).where(eq(products.userId, userId));
   }
 
   async getProduct(id: number): Promise<Product | undefined> {
-    return this.products.get(id);
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product;
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
-    const id = this.productIdCounter++;
-    const newProduct: Product = { 
-      ...product, 
-      id,
-      description: product.description || null,
-      hsnCode: product.hsnCode || null
-    };
-    this.products.set(id, newProduct);
+    const [newProduct] = await db.insert(products).values(product).returning();
     return newProduct;
   }
 
   async updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined> {
-    const existingProduct = this.products.get(id);
-    if (!existingProduct) return undefined;
-    
-    const updatedProduct = { ...existingProduct, ...product };
-    this.products.set(id, updatedProduct);
+    const [updatedProduct] = await db
+      .update(products)
+      .set(product)
+      .where(eq(products.id, id))
+      .returning();
     return updatedProduct;
   }
 
   async deleteProduct(id: number): Promise<boolean> {
-    return this.products.delete(id);
+    const [deletedProduct] = await db
+      .delete(products)
+      .where(eq(products.id, id))
+      .returning();
+    return !!deletedProduct;
   }
-  
-  // Invoice Management
+
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
-    console.log(`Getting invoices for user ${userId}`);
-    console.log(`Total invoices in storage: ${this.invoices.size}`);
-    console.log("All invoices:", Array.from(this.invoices.values()));
-    
-    const invoices = Array.from(this.invoices.values()).filter(
-      (invoice) => invoice.userId === userId
-    );
-    
-    console.log(`Found ${invoices.length} invoices for user ${userId}:`, invoices);
-    return invoices;
+    return db.select().from(invoices)
+      .where(eq(invoices.userId, userId))
+      .orderBy(desc(invoices.createdAt));
   }
 
   async getInvoice(id: number): Promise<Invoice | undefined> {
-    return this.invoices.get(id);
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return invoice;
   }
 
-  async getInvoiceWithItems(id: number): Promise<{invoice: Invoice, items: InvoiceItem[]}> {
-    const invoice = this.invoices.get(id);
-    if (!invoice) throw new Error("Invoice not found");
+  async getInvoiceWithItems(id: number): Promise<{ invoice: Invoice; items: InvoiceItem[] }> {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
     
-    const items = Array.from(this.invoiceItems.values()).filter(
-      (item) => item.invoiceId === id
-    );
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
     
-    return { invoice, items };
+    const items = await db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, id));
+    
+    return {
+      invoice,
+      items
+    };
   }
 
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
-    const id = this.invoiceIdCounter++;
-    
-    // Ensure required fields have values
-    const completeInvoice = {
-      ...invoice,
-      id,
-      status: invoice.status || "pending",
-      invoiceDate: invoice.invoiceDate || new Date(),
-      dueDate: invoice.dueDate || null,
-      notes: invoice.notes || null,
-      cgst: invoice.cgst || null,
-      sgst: invoice.sgst || null,
-      igst: invoice.igst || null,
-      termsAndConditions: invoice.termsAndConditions || null
-    };
-    
-    console.log("Creating invoice with complete data:", completeInvoice);
-    this.invoices.set(id, completeInvoice);
-    
-    // Add invoice items
-    for (const item of items) {
-      const completeItem = {
-        ...item,
-        invoiceId: id,
-        hsnCode: item.hsnCode || null,
-        productId: item.productId || null
-      };
-      await this.addInvoiceItem(completeItem);
-    }
-    
-    return completeInvoice;
+    // Start a transaction
+    return await db.transaction(async (tx) => {
+      // Insert invoice
+      const [newInvoice] = await tx.insert(invoices).values(invoice).returning();
+      
+      // Insert all invoice items with the new invoice ID
+      if (items.length > 0) {
+        const itemsWithInvoiceId = items.map(item => ({
+          ...item,
+          invoiceId: newInvoice.id
+        }));
+        
+        await tx.insert(invoiceItems).values(itemsWithInvoiceId);
+      }
+      
+      return newInvoice;
+    });
   }
 
   async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
-    const existingInvoice = this.invoices.get(id);
-    if (!existingInvoice) return undefined;
-    
-    const updatedInvoice = { ...existingInvoice, ...invoice };
-    this.invoices.set(id, updatedInvoice);
+    const [updatedInvoice] = await db
+      .update(invoices)
+      .set(invoice)
+      .where(eq(invoices.id, id))
+      .returning();
     return updatedInvoice;
   }
 
   async deleteInvoice(id: number): Promise<boolean> {
-    // Delete invoice items first
-    const items = await this.getInvoiceItems(id);
-    for (const item of items) {
-      await this.deleteInvoiceItem(item.id);
-    }
-    
-    return this.invoices.delete(id);
+    return await db.transaction(async (tx) => {
+      // Delete associated invoice items first
+      await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, id));
+      
+      // Then delete the invoice
+      const [deletedInvoice] = await tx
+        .delete(invoices)
+        .where(eq(invoices.id, id))
+        .returning();
+      
+      return !!deletedInvoice;
+    });
   }
-  
-  // Invoice Item Management
+
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
-    return Array.from(this.invoiceItems.values()).filter(
-      (item) => item.invoiceId === invoiceId
-    );
+    return db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
   }
 
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
-    const id = this.invoiceItemIdCounter++;
-    const newItem: InvoiceItem = { 
-      ...item, 
-      id,
-      hsnCode: item.hsnCode || null,
-      productId: item.productId || null
-    };
-    this.invoiceItems.set(id, newItem);
+    const [newItem] = await db.insert(invoiceItems).values(item).returning();
     return newItem;
   }
 
   async updateInvoiceItem(id: number, item: Partial<InsertInvoiceItem>): Promise<InvoiceItem | undefined> {
-    const existingItem = this.invoiceItems.get(id);
-    if (!existingItem) return undefined;
-    
-    const updatedItem = { ...existingItem, ...item };
-    this.invoiceItems.set(id, updatedItem);
+    const [updatedItem] = await db
+      .update(invoiceItems)
+      .set(item)
+      .where(eq(invoiceItems.id, id))
+      .returning();
     return updatedItem;
   }
 
   async deleteInvoiceItem(id: number): Promise<boolean> {
-    return this.invoiceItems.delete(id);
+    const [deletedItem] = await db
+      .delete(invoiceItems)
+      .where(eq(invoiceItems.id, id))
+      .returning();
+    return !!deletedItem;
   }
-  
-  // Analytics
+
   async getInvoiceStats(userId: number): Promise<{
     totalInvoices: number;
     totalRevenue: number;
     unpaidInvoices: number;
     totalCustomers: number;
   }> {
-    const invoices = await this.getInvoicesByUserId(userId);
-    const customers = await this.getCustomersByUserId(userId);
+    // Get total number of invoices
+    const [invoiceCount] = await db
+      .select({ count: db.fn.count() })
+      .from(invoices)
+      .where(eq(invoices.userId, userId));
     
-    const totalInvoices = invoices.length;
-    const totalRevenue = invoices.reduce((sum, invoice) => 
-      sum + Number(invoice.total), 0);
-    const unpaidInvoices = invoices.filter(
-      invoice => invoice.status === "pending" || invoice.status === "overdue"
-    ).length;
-    const totalCustomers = customers.length;
+    // Calculate total revenue (sum of all invoice totals)
+    const [revenueResult] = await db
+      .select({ sum: db.fn.sum(invoices.total) })
+      .from(invoices)
+      .where(eq(invoices.userId, userId));
+    
+    // Count unpaid invoices (status is not 'paid')
+    const [unpaidCount] = await db
+      .select({ count: db.fn.count() })
+      .from(invoices)
+      .where(and(
+        eq(invoices.userId, userId),
+        eq(invoices.status, 'pending')
+      ));
+    
+    // Count total customers
+    const [customerCount] = await db
+      .select({ count: db.fn.count() })
+      .from(customers)
+      .where(eq(customers.userId, userId));
     
     return {
-      totalInvoices,
-      totalRevenue,
-      unpaidInvoices,
-      totalCustomers
+      totalInvoices: Number(invoiceCount?.count || 0),
+      totalRevenue: Number(revenueResult?.sum || 0),
+      unpaidInvoices: Number(unpaidCount?.count || 0),
+      totalCustomers: Number(customerCount?.count || 0)
     };
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
