@@ -30,10 +30,9 @@ function Router() {
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
-  // If not logged in and not on the landing or auth page, show landing page
   return (
     <Switch>
-      {/* Public routes */}
+      {/* Public routes - Landing page is always accessible */}
       <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
 

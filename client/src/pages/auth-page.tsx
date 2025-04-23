@@ -47,7 +47,7 @@ export default function AuthPage() {
   // If the user is already logged in, redirect to dashboard
   useEffect(() => {
     if (user) {
-      navigate("/");
+      navigate("/dashboard");
     }
   }, [user, navigate]);
 
