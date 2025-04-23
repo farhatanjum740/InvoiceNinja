@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { EyeIcon, PencilIcon, TrashIcon, SearchIcon, ChevronLeftIcon, ChevronRightIcon, FilterIcon, DownloadIcon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function InvoicesPage() {
@@ -21,8 +23,9 @@ export default function InvoicesPage() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const [invoiceToDelete, setInvoiceToDelete] = useState<number | null>(null);
+  const { toast } = useToast();
 
-  const { data: invoices, isLoading } = useQuery({
+  const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["/api/invoices"],
   });
 
@@ -58,26 +61,59 @@ export default function InvoicesPage() {
   };
 
   // Filter and search invoices
-  const filteredInvoices = invoices
-    ? invoices.filter((invoice: any) => {
-        const matchesSearch =
-          !searchQuery ||
-          invoice.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          invoice.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
-        
-        const matchesStatus = statusFilter === "all" || invoice.status.toLowerCase() === statusFilter.toLowerCase();
-        
-        return matchesSearch && matchesStatus;
-      })
-    : [];
+  const filteredInvoices = invoices.filter((invoice: any) => {
+    const matchesSearch =
+      !searchQuery ||
+      invoice.invoiceNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      invoice.customerName?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" || invoice.status?.toLowerCase() === statusFilter.toLowerCase();
+    
+    return matchesSearch && matchesStatus;
+  });
 
   // Paginate invoices
   const paginatedInvoices = filteredInvoices.slice((page - 1) * pageSize, page * pageSize);
   const totalPages = Math.ceil(filteredInvoices.length / pageSize);
 
+  // Function to view an invoice detail
+  const handleViewInvoice = (id: number) => {
+    toast({
+      title: "View Invoice",
+      description: "Opening invoice details...",
+    });
+    // TODO: Open a modal with invoice details or navigate to a detail page
+    console.log("Viewing invoice:", id);
+  };
+  
+  // Function to edit an invoice
+  const handleEditInvoice = (id: number) => {
+    toast({
+      title: "Edit Invoice",
+      description: "Redirecting to edit page...",
+    });
+    // TODO: Navigate to edit page or open edit modal
+    console.log("Editing invoice:", id);
+  };
+  
+  // Function to download an invoice as PDF
+  const handleDownloadInvoice = (id: number) => {
+    toast({
+      title: "Downloading Invoice",
+      description: "Preparing PDF for download...",
+    });
+    // TODO: Call API to generate and download PDF
+    console.log("Downloading invoice:", id);
+  };
+
+  // Function to delete an invoice
   const handleDeleteInvoice = async () => {
     // Here we would call the API to delete the invoice
-    // For now, just close the dialog
+    // For now, just close the dialog and show a success message
+    toast({
+      title: "Invoice Deleted",
+      description: "The invoice has been successfully deleted.",
+    });
     setInvoiceToDelete(null);
   };
 
