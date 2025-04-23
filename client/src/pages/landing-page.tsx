@@ -1,10 +1,31 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { BannerAd, InContentAd } from "@/components/ui/adsense";
+import { Helmet } from "react-helmet";
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <Helmet>
+        <title>InvoiceGenius - GST Invoicing for Indian Businesses</title>
+        <meta name="description" content="Create professional GST-compliant invoices quickly and easily with InvoiceGenius. Manage customers, products, and payments all in one place." />
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "InvoiceGenius",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "INR"
+            },
+            "description": "GST-compliant invoicing software for Indian businesses"
+          })}
+        </script>
+      </Helmet>
+      
       {/* Navigation */}
       <nav className="container mx-auto px-6 py-4">
         <div className="flex justify-between items-center">
