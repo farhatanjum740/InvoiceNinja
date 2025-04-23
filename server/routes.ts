@@ -13,9 +13,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/company", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     
-    const company = await storage.getCompanyByUserId(req.user!.id);
+    let company = await storage.getCompanyByUserId(req.user!.id);
+    
+    // If company doesn't exist, create a default company profile
     if (!company) {
-      return res.status(404).json({ message: "Company not found" });
+      // Create a default company with placeholder data
+      const defaultCompany = {
+        name: req.user!.name ? `${req.user!.name}'s Business` : "Your Business",
+        userId: req.user!.id,
+        email: req.user!.email || "",
+        phone: "",
+        address: "",
+        city: "",
+        state: "",
+        pincode: "",
+        country: "India",
+        gstin: "",
+        panNumber: "",
+        bankName: "",
+        accountNumber: "",
+        ifscCode: "",
+        logo: "",
+      };
+      
+      try {
+        company = await storage.createCompany(defaultCompany);
+        console.log("Created default company profile for user", req.user!.id);
+      } catch (error) {
+        console.error("Error creating default company profile:", error);
+        return res.status(500).json({ message: "Failed to create default company profile" });
+      }
     }
     
     res.json(company);
