@@ -44,12 +44,8 @@ export default function AuthPage() {
   const [activeTab, setActiveTab] = useState("login");
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
-  // If the user is already logged in, redirect to dashboard
-  useEffect(() => {
-    if (user) {
-      navigate("/dashboard");
-    }
-  }, [user, navigate]);
+  // Redirect logic moved to App.tsx with AuthedRedirect component
+  // No automatic redirects here anymore
 
   // Login form
   const loginForm = useForm<LoginFormValues>({

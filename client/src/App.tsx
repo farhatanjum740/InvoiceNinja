@@ -1,9 +1,8 @@
 import { Toaster } from "@/components/ui/toaster";
-import { Route, Switch } from "wouter";
-import { useEffect, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { Route, Switch, useLocation } from "wouter";
+import { useEffect } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 
 // Pages
 import LandingPage from "@/pages/landing-page";
@@ -18,25 +17,48 @@ import CompanyPage from "@/pages/company-page";
 import ReportsPage from "@/pages/reports-page";
 
 // Auth Provider
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 
 // For Google AdSense
 import { Helmet } from "react-helmet";
 
-function Router() {
-  const { data: user, isLoading } = useQuery({
-    queryKey: ["/api/user"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-  });
+// Component to handle dashboard redirect if authenticated
+function AuthedRedirect() {
+  const { user, isLoading } = useAuth();
+  const [, navigate] = useLocation();
+  
+  useEffect(() => {
+    if (user && !isLoading) {
+      navigate("/dashboard");
+    }
+  }, [user, isLoading, navigate]);
+  
+  return null;
+}
 
+// Public route that doesn't redirect when authenticated
+function PublicRoute({ path, component: Component }: { path: string, component: () => React.JSX.Element }) {
+  return (
+    <Route path={path}>
+      <Component />
+    </Route>
+  );
+}
+
+function AppRoutes() {
   return (
     <Switch>
-      {/* Public routes - Landing page is always accessible */}
-      <Route path="/" component={LandingPage} />
-      <Route path="/auth" component={AuthPage} />
+      {/* Home page - always accessible */}
+      <PublicRoute path="/" component={LandingPage} />
+      
+      {/* Auth page - accessible to everyone, but redirects logged-in users to dashboard */}
+      <Route path="/auth">
+        <AuthPage />
+        <AuthedRedirect />
+      </Route>
 
-      {/* Protected routes */}
+      {/* Protected routes - require authentication */}
       <ProtectedRoute path="/dashboard" component={DashboardPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
       <ProtectedRoute path="/invoices/create" component={CreateInvoicePage} />
@@ -60,7 +82,7 @@ function App() {
             {/* Google AdSense script - add your publisher ID when ready */}
             <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossOrigin="anonymous"></script>
           </Helmet>
-          <Router />
+          <AppRoutes />
           <Toaster />
         </div>
       </AuthProvider>
