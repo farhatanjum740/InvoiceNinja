@@ -52,6 +52,7 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
     defaultValues: product
       ? {
           ...product,
+          rate: product.rate.toString(), // Convert rate to string
           userId: user?.id,
         }
       : {
@@ -59,7 +60,7 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
           description: "",
           hsnCode: "",
           unit: "",
-          rate: 0,
+          rate: "0", // Set rate as string
           gstRate: 18, // Default GST rate
           userId: user?.id,
         },
@@ -209,7 +210,8 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
                     step="0.01" 
                     placeholder="Enter rate" 
                     {...field}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value)}
                   />
                 </FormControl>
                 <FormDescription>Price per unit (excluding tax)</FormDescription>
