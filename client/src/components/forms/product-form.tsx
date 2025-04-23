@@ -113,10 +113,17 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
 
   // Form submission handler
   function onSubmit(values: z.infer<typeof insertProductSchema>) {
+    // Ensure null values are properly handled
+    const productData = {
+      ...values,
+      description: values.description || null,
+      hsnCode: values.hsnCode || null
+    };
+    
     if (product) {
-      updateProductMutation.mutate(values);
+      updateProductMutation.mutate(productData);
     } else {
-      createProductMutation.mutate(values);
+      createProductMutation.mutate(productData);
     }
   }
 
@@ -147,7 +154,11 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
               <FormItem className="md:col-span-2">
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea placeholder="Enter product description (optional)" {...field} />
+                  <Textarea 
+                    placeholder="Enter product description (optional)" 
+                    {...field} 
+                    value={field.value || ''} 
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -161,7 +172,11 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
               <FormItem>
                 <FormLabel>HSN/SAC Code</FormLabel>
                 <FormControl>
-                  <Input placeholder="Enter HSN/SAC code" {...field} />
+                  <Input 
+                    placeholder="Enter HSN/SAC code" 
+                    {...field}
+                    value={field.value || ''}  
+                  />
                 </FormControl>
                 <FormDescription>Harmonized System of Nomenclature code for GST</FormDescription>
                 <FormMessage />

@@ -331,11 +331,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Extracted invoice data:", invoiceData);
       console.log("Extracted items data:", itemsData);
       
-      // Validate invoice data
-      const validatedInvoice = insertInvoiceSchema.parse({
+      // Validate invoice data and ensure no undefined values
+      // Provide defaults for optional fields
+      const invoiceWithDefaults = {
         ...invoiceData,
-        userId: req.user!.id
-      });
+        userId: req.user!.id,
+        status: invoiceData.status || "pending",
+        invoiceDate: invoiceData.invoiceDate || new Date(),
+        dueDate: invoiceData.dueDate || null,
+        notes: invoiceData.notes || null,
+        cgst: invoiceData.cgst || null,
+        sgst: invoiceData.sgst || null,
+        igst: invoiceData.igst || null,
+        termsAndConditions: invoiceData.termsAndConditions || null
+      };
+      
+      console.log("Invoice with defaults:", invoiceWithDefaults);
+      const validatedInvoice = insertInvoiceSchema.parse(invoiceWithDefaults);
       
       console.log("Validated invoice data:", validatedInvoice);
       

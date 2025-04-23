@@ -185,7 +185,12 @@ export class MemStorage implements IStorage {
 
   async createProduct(product: InsertProduct): Promise<Product> {
     const id = this.productIdCounter++;
-    const newProduct: Product = { ...product, id };
+    const newProduct: Product = { 
+      ...product, 
+      id,
+      description: product.description || null,
+      hsnCode: product.hsnCode || null
+    };
     this.products.set(id, newProduct);
     return newProduct;
   }
@@ -234,15 +239,36 @@ export class MemStorage implements IStorage {
 
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
     const id = this.invoiceIdCounter++;
-    const newInvoice: Invoice = { ...invoice, id };
-    this.invoices.set(id, newInvoice);
+    
+    // Ensure required fields have values
+    const completeInvoice = {
+      ...invoice,
+      id,
+      status: invoice.status || "pending",
+      invoiceDate: invoice.invoiceDate || new Date(),
+      dueDate: invoice.dueDate || null,
+      notes: invoice.notes || null,
+      cgst: invoice.cgst || null,
+      sgst: invoice.sgst || null,
+      igst: invoice.igst || null,
+      termsAndConditions: invoice.termsAndConditions || null
+    };
+    
+    console.log("Creating invoice with complete data:", completeInvoice);
+    this.invoices.set(id, completeInvoice);
     
     // Add invoice items
     for (const item of items) {
-      await this.addInvoiceItem({ ...item, invoiceId: id });
+      const completeItem = {
+        ...item,
+        invoiceId: id,
+        hsnCode: item.hsnCode || null,
+        productId: item.productId || null
+      };
+      await this.addInvoiceItem(completeItem);
     }
     
-    return newInvoice;
+    return completeInvoice;
   }
 
   async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
@@ -273,7 +299,12 @@ export class MemStorage implements IStorage {
 
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
     const id = this.invoiceItemIdCounter++;
-    const newItem: InvoiceItem = { ...item, id };
+    const newItem: InvoiceItem = { 
+      ...item, 
+      id,
+      hsnCode: item.hsnCode || null,
+      productId: item.productId || null
+    };
     this.invoiceItems.set(id, newItem);
     return newItem;
   }
