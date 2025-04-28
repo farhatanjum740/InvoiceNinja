@@ -1036,15 +1036,18 @@ export class SupabaseStorage implements IStorage {
         userId: invoiceData.user_id,
         customerId: invoiceData.customer_id,
         invoiceNumber: invoiceData.invoice_number,
-        date: invoiceData.date,
+        invoiceDate: invoiceData.invoice_date,
         dueDate: invoiceData.due_date,
         notes: invoiceData.notes || null,
         status: invoiceData.status,
         subtotal: invoiceData.subtotal,
-        tax: invoiceData.tax,
-        discount: invoiceData.discount,
+        cgst: invoiceData.cgst || '0.00',
+        sgst: invoiceData.sgst || '0.00',
+        igst: invoiceData.igst || '0.00',
         total: invoiceData.total,
-        termsAndConditions: invoiceData.terms_and_conditions || null
+        termsAndConditions: invoiceData.terms_and_conditions || null,
+        templateId: invoiceData.template_id || 'standard',
+        colorTheme: invoiceData.color_theme || 'blue'
       };
       
       // Transform Supabase snake_case to camelCase for items
@@ -1073,16 +1076,21 @@ export class SupabaseStorage implements IStorage {
         user_id: invoice.userId,
         customer_id: invoice.customerId,
         invoice_number: invoice.invoiceNumber,
-        date: invoice.date,
+        invoice_date: invoice.invoiceDate,
         due_date: invoice.dueDate,
         notes: invoice.notes,
         status: invoice.status,
         subtotal: invoice.subtotal,
-        tax: invoice.tax,
-        discount: invoice.discount,
+        cgst: invoice.cgst || '0.00',  // Ensure non-null default value
+        sgst: invoice.sgst || '0.00',  // Ensure non-null default value
+        igst: invoice.igst || '0.00',  // Ensure non-null default value
         total: invoice.total,
-        terms_and_conditions: invoice.termsAndConditions
+        terms_and_conditions: invoice.termsAndConditions,
+        template_id: invoice.templateId,
+        color_theme: invoice.colorTheme
       };
+      
+      console.log("Saving invoice to Supabase:", supabaseInvoice);
       
       // Insert invoice using Supabase
       const { data: invoiceData, error: invoiceError } = await supabase
