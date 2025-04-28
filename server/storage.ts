@@ -3,6 +3,7 @@ import { supabase } from "./db";
 import session from "express-session";
 import MemoryStore from "memorystore";
 import { Pool } from "@neondatabase/serverless";
+import { resetSequences } from "./utils/reset-sequences";
 
 // Initialize the memory store for sessions
 const MemStore = MemoryStore(session);
@@ -1081,7 +1082,8 @@ export class SupabaseStorage implements IStorage {
         
         // Try to reset sequences using the utility function as backup
         try {
-          const { resetSequences } = require('./utils/reset-sequences');
+          // Using properly imported resetSequences
+          console.log("Attempting to reset sequences with imported function");
           await resetSequences();
         } catch (utilError) {
           console.error("Failed to reset sequences using utility function:", utilError);
@@ -1393,8 +1395,13 @@ export class SupabaseStorage implements IStorage {
       } catch (seqError) {
         console.error("Failed to reset invoice_items sequence:", seqError);
         
-        // Just log the error, we can't use dynamic requires in ESM
-        console.log("Note: Can't load resetSequences dynamically in this environment");
+        // Using properly imported resetSequences
+        console.log("Attempting to reset sequences with imported function");
+        try {
+          await resetSequences();
+        } catch (resetError) {
+          console.error("Error resetting sequences:", resetError);
+        }
       }
       
       // Ensure numeric values are valid numbers
