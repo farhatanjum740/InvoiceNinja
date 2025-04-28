@@ -224,12 +224,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating product:", error);
       
-      // Provide more specific error messages for known error types
-      if (error.code === '23505') {
+      // Handle our custom duplicate name error
+      if (error.code === 'DUPLICATE_NAME') {
         return res.status(400).json({ 
-          error: "Duplicate record", 
-          details: "A product with this information already exists."
+          error: "Duplicate product name", 
+          details: error.message
         });
+      }
+      
+      // Provide more specific error messages for known DB error types
+      if (error.code === '23505') {
+        if (error.message.includes('products_user_id_name_key')) {
+          return res.status(400).json({ 
+            error: "Duplicate product name", 
+            details: "You already have a product with this name. Each product name must be unique."
+          });
+        } else {
+          return res.status(400).json({ 
+            error: "Duplicate record", 
+            details: "A product with this information already exists."
+          });
+        }
       }
       
       return res.status(500).json({ 
@@ -277,8 +292,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedProduct = await storage.updateProduct(productId, req.body);
       
       return res.json(updatedProduct);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating product:", error);
+      
+      // Handle our custom duplicate name error
+      if (error.code === 'DUPLICATE_NAME') {
+        return res.status(400).json({ 
+          error: "Duplicate product name", 
+          details: error.message
+        });
+      }
+      
+      // Handle other database constraint errors
+      if (error.code === '23505') {
+        if (error.message.includes('products_user_id_name_key')) {
+          return res.status(400).json({ 
+            error: "Duplicate product name", 
+            details: "You already have a product with this name. Each product name must be unique."
+          });
+        }
+      }
+      
       return res.status(500).json({ error: "Server error" });
     }
   });

@@ -637,6 +637,24 @@ export class SupabaseStorage implements IStorage {
 
   async createProduct(product: InsertProduct): Promise<Product> {
     try {
+      // First check if a product with this name already exists for this user
+      const { data: existingProduct, error: existingError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('user_id', product.userId)
+        .eq('name', product.name)
+        .limit(1);
+      
+      if (existingError) {
+        console.error("Error checking existing product:", existingError);
+        // Continue anyway as it's not critical
+      } else if (existingProduct && existingProduct.length > 0) {
+        // A product with this name already exists for this user
+        const error = new Error(`A product with name "${product.name}" already exists`);
+        Object.assign(error, { code: 'DUPLICATE_NAME' });
+        throw error;
+      }
+      
       // Get the maximum product ID to ensure we never reuse IDs
       const { data: maxIdData, error: maxIdError } = await supabase
         .from('products')
@@ -685,12 +703,23 @@ export class SupabaseStorage implements IStorage {
             .single();
             
           if (error) {
-            if (error.code === '23505' && error.message.includes('products_pkey')) {
-              // Primary key violation, we'll retry with a different ID
-              console.log(`ID ${supabaseProduct.id} already exists, retrying...`);
-              lastError = error;
-              retryCount++;
-              continue;
+            if (error.code === '23505') {
+              if (error.message.includes('products_pkey')) {
+                // Primary key violation, we'll retry with a different ID
+                console.log(`ID ${supabaseProduct.id} already exists, retrying...`);
+                lastError = error;
+                retryCount++;
+                continue;
+              } else if (error.message.includes('products_user_id_name_key')) {
+                // Duplicate name constraint violation
+                const duplicateError = new Error(`A product with name "${product.name}" already exists`);
+                Object.assign(duplicateError, { code: 'DUPLICATE_NAME' });
+                throw duplicateError;
+              } else {
+                // Other unique constraint violation
+                console.error("Supabase unique constraint error:", error);
+                throw error;
+              }
             } else {
               // Different error
               console.error("Supabase product insert error:", error);
@@ -710,6 +739,11 @@ export class SupabaseStorage implements IStorage {
             gstRate: data.gst_rate
           };
         } catch (error: any) {
+          // Check if it's our custom error
+          if (error.code === 'DUPLICATE_NAME') {
+            throw error;
+          }
+          
           // Only retry for primary key violations
           if (error.code === '23505' && error.message.includes('products_pkey') && retryCount < maxRetries) {
             lastError = error;
@@ -731,6 +765,40 @@ export class SupabaseStorage implements IStorage {
 
   async updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined> {
     try {
+      // Check if renaming to a name that already exists for this user
+      if ('name' in product && product.name) {
+        // Get the current product to get the userId
+        const { data: currentProduct, error: currentError } = await supabase
+          .from('products')
+          .select('user_id')
+          .eq('id', id)
+          .single();
+          
+        if (currentError) {
+          console.error("Error fetching current product:", currentError);
+          return undefined;
+        }
+        
+        // Check if another product with this name exists for this user (excluding the current product)
+        const { data: existingProduct, error: existingError } = await supabase
+          .from('products')
+          .select('id')
+          .eq('user_id', currentProduct.user_id)
+          .eq('name', product.name)
+          .neq('id', id) // exclude the current product
+          .limit(1);
+        
+        if (existingError) {
+          console.error("Error checking existing product:", existingError);
+          // Continue anyway as it's not critical
+        } else if (existingProduct && existingProduct.length > 0) {
+          // A product with this name already exists for this user
+          const error = new Error(`A product with name "${product.name}" already exists`);
+          Object.assign(error, { code: 'DUPLICATE_NAME' });
+          throw error;
+        }
+      }
+      
       // Convert partial product from camelCase to snake_case
       const supabaseProduct: Record<string, any> = {};
       
@@ -743,31 +811,56 @@ export class SupabaseStorage implements IStorage {
       if ('gstRate' in product) supabaseProduct.gst_rate = product.gstRate;
       
       // Update using Supabase
-      const { data, error } = await supabase
-        .from('products')
-        .update(supabaseProduct)
-        .eq('id', id)
-        .select()
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .update(supabaseProduct)
+          .eq('id', id)
+          .select()
+          .single();
+          
+        if (error) {
+          if (error.code === '23505' && error.message.includes('products_user_id_name_key')) {
+            // Duplicate name constraint violation
+            const duplicateError = new Error(`A product with name "${product.name}" already exists`);
+            Object.assign(duplicateError, { code: 'DUPLICATE_NAME' });
+            throw duplicateError;
+          } else {
+            console.error("Supabase product update error:", error);
+            return undefined;
+          }
+        }
         
-      if (error) {
-        console.error("Supabase product update error:", error);
-        return undefined;
+        // Transform back to camelCase
+        return {
+          id: data.id,
+          userId: data.user_id,
+          name: data.name,
+          description: data.description || null,
+          hsnCode: data.hsn_code || null,
+          unit: data.unit || null,
+          rate: data.rate,
+          gstRate: data.gst_rate
+        };
+      } catch (error: any) {
+        // Check if it's our custom error or a database constraint error
+        if (error.code === 'DUPLICATE_NAME' || 
+           (error.code === '23505' && error.message.includes('products_user_id_name_key'))) {
+          const duplicateError = new Error(`A product with name "${product.name}" already exists`);
+          Object.assign(duplicateError, { code: 'DUPLICATE_NAME' });
+          throw duplicateError;
+        } else {
+          throw error;
+        }
+      }
+    } catch (error: any) {
+      console.error("Error updating product:", error);
+      
+      // Re-throw custom errors to be handled by the API route
+      if (error.code === 'DUPLICATE_NAME') {
+        throw error;
       }
       
-      // Transform back to camelCase
-      return {
-        id: data.id,
-        userId: data.user_id,
-        name: data.name,
-        description: data.description || null,
-        hsnCode: data.hsn_code || null,
-        unit: data.unit || null,
-        rate: data.rate,
-        gstRate: data.gst_rate
-      };
-    } catch (error) {
-      console.error("Error updating product:", error);
       return undefined;
     }
   }
