@@ -10,18 +10,23 @@ export let client: ReturnType<typeof postgres>;
 
 try {
   // Try to connect to the database if credentials are available
-  if (process.env.SUPABASE_POSTGRES_URL) {
-    // Use direct connection parameters instead of URL to avoid parsing issues
-    // Extract parts from the URL manually if needed
-    client = postgres({
-      host: 'db.ripfbellqefpypeheyme.supabase.co',
-      port: 5432,
-      database: 'postgres',
-      username: 'postgres',
-      password: process.env.PGPASSWORD || process.env.SUPABASE_DB_PASSWORD || 'password',
+  if (process.env.DATABASE_URL) {
+    // Use the DATABASE_URL provided by environment
+    client = postgres(process.env.DATABASE_URL, {
       ssl: { rejectUnauthorized: false },
     });
-    console.log('Connected to Supabase PostgreSQL database');
+    console.log('Connected to PostgreSQL database using DATABASE_URL');
+  } else if (process.env.PGHOST && process.env.PGDATABASE && process.env.PGUSER && process.env.PGPASSWORD) {
+    // Use individual connection parameters if available
+    client = postgres({
+      host: process.env.PGHOST,
+      port: parseInt(process.env.PGPORT || '5432'),
+      database: process.env.PGDATABASE,
+      username: process.env.PGUSER,
+      password: process.env.PGPASSWORD,
+      ssl: { rejectUnauthorized: false },
+    });
+    console.log('Connected to PostgreSQL database using connection parameters');
   } else {
     // Fallback to a mock client for development
     console.log('No database URL provided, using mock client');

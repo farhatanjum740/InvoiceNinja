@@ -85,16 +85,22 @@ export async function setupAuth(app: Express) {
       // Validate request body
       const validatedData = registerSchema.parse(req.body);
       
-      // Check if username is already taken
-      const existingUser = await storage.getUserByUsername(validatedData.username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already taken" });
-      }
-      
-      // Check if email is already registered
-      const existingEmail = await storage.getUserByEmail(validatedData.email);
-      if (existingEmail) {
-        return res.status(400).json({ message: "Email already registered" });
+      try {
+        // Check if username is already taken
+        const existingUser = await storage.getUserByUsername(validatedData.username);
+        if (existingUser) {
+          return res.status(400).json({ message: "Username already taken" });
+        }
+        
+        // Check if email is already registered
+        const existingEmail = await storage.getUserByEmail(validatedData.email);
+        if (existingEmail) {
+          return res.status(400).json({ message: "Email already registered" });
+        }
+      } catch (error) {
+        console.error("Error checking existing users:", error);
+        // Continue with registration even if we can't check for existing users
+        // This is to handle case where the tables might not exist yet on first run
       }
       
       // Create user in Supabase (if integration is available)
