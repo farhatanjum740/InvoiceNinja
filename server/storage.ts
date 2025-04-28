@@ -637,8 +637,25 @@ export class SupabaseStorage implements IStorage {
 
   async createProduct(product: InsertProduct): Promise<Product> {
     try {
+      // Get the maximum product ID to ensure we never reuse IDs
+      const { data: maxIdData, error: maxIdError } = await supabase
+        .from('products')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1);
+      
+      if (maxIdError) {
+        console.error("Error fetching max product ID:", maxIdError);
+        // Continue anyway, we'll handle potential conflicts below
+      }
+      
+      // Use a high starting ID if there are no products yet, or increment the highest existing ID
+      const nextId = maxIdData && maxIdData.length > 0 ? maxIdData[0].id + 1 : 1000;
+      console.log(`Using next product ID: ${nextId}`);
+      
       // Transform to snake_case for Supabase
       const supabaseProduct = {
+        id: nextId, // Explicitly set the ID to avoid conflicts
         user_id: product.userId,
         name: product.name,
         description: product.description,
@@ -648,63 +665,64 @@ export class SupabaseStorage implements IStorage {
         gst_rate: product.gstRate
       };
       
-      // Insert using Supabase with explicit error handling
-      try {
-        const { data, error } = await supabase
-          .from('products')
-          .insert(supabaseProduct)
-          .select()
-          .single();
+      // Insert with retry logic in case of conflicts
+      let retryCount = 0;
+      const maxRetries = 3;
+      let lastError = null;
+      
+      while (retryCount < maxRetries) {
+        try {
+          // If this isn't the first attempt, increment the ID
+          if (retryCount > 0) {
+            supabaseProduct.id += 1;
+            console.log(`Retry attempt ${retryCount} with ID: ${supabaseProduct.id}`);
+          }
           
-        if (error) {
-          console.error("Supabase product insert error:", error);
-          throw error;
-        }
-        
-        // Transform back to camelCase
-        return {
-          id: data.id,
-          userId: data.user_id,
-          name: data.name,
-          description: data.description || null,
-          hsnCode: data.hsn_code || null,
-          unit: data.unit || null,
-          rate: data.rate,
-          gstRate: data.gst_rate
-        };
-      } catch (supabaseError: any) {
-        // If there's a primary key violation, let's try again without specifying an ID
-        if (supabaseError.code === '23505' && supabaseError.message.includes('products_pkey')) {
-          console.log("Handling primary key violation, retrying with auto-generated ID");
-          
-          // Retry the insert
-          const { data: retryData, error: retryError } = await supabase
+          const { data, error } = await supabase
             .from('products')
             .insert(supabaseProduct)
             .select()
             .single();
             
-          if (retryError) {
-            console.error("Retry product insert error:", retryError);
-            throw retryError;
+          if (error) {
+            if (error.code === '23505' && error.message.includes('products_pkey')) {
+              // Primary key violation, we'll retry with a different ID
+              console.log(`ID ${supabaseProduct.id} already exists, retrying...`);
+              lastError = error;
+              retryCount++;
+              continue;
+            } else {
+              // Different error
+              console.error("Supabase product insert error:", error);
+              throw error;
+            }
           }
           
-          // Transform back to camelCase
+          // Success! Transform back to camelCase and return
           return {
-            id: retryData.id,
-            userId: retryData.user_id,
-            name: retryData.name,
-            description: retryData.description || null,
-            hsnCode: retryData.hsn_code || null,
-            unit: retryData.unit || null,
-            rate: retryData.rate,
-            gstRate: retryData.gst_rate
+            id: data.id,
+            userId: data.user_id,
+            name: data.name,
+            description: data.description || null,
+            hsnCode: data.hsn_code || null,
+            unit: data.unit || null,
+            rate: data.rate,
+            gstRate: data.gst_rate
           };
-        } else {
-          // For other errors, just throw
-          throw supabaseError;
+        } catch (error: any) {
+          // Only retry for primary key violations
+          if (error.code === '23505' && error.message.includes('products_pkey') && retryCount < maxRetries) {
+            lastError = error;
+            retryCount++;
+          } else {
+            throw error;
+          }
         }
       }
+      
+      // If we get here, we've exhausted our retries
+      console.error(`Failed to create product after ${maxRetries} attempts`);
+      throw lastError || new Error('Failed to create product after multiple attempts');
     } catch (error) {
       console.error("Error creating product:", error);
       throw error;
