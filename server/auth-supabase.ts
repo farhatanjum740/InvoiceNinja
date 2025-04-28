@@ -48,8 +48,9 @@ export async function setupAuth(app: Express) {
   
   // Add authentication middleware to check session
   app.use(async (req: Request, res: Response, next: NextFunction) => {
-    // Skip authentication for public routes
+    // Skip authentication for public routes and non-API requests (frontend routes)
     if (
+      !req.path.startsWith("/api") || // Allow all non-API routes (frontend routes)
       req.path === "/api/login" ||
       req.path === "/api/register" ||
       req.path === "/api/env" ||
@@ -74,7 +75,7 @@ export async function setupAuth(app: Express) {
       }
     }
     
-    // User is not authenticated
+    // User is not authenticated - only return 401 for API requests
     return res.status(401).json({ message: "Not authenticated" });
   });
   
