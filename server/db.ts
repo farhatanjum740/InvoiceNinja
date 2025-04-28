@@ -6,7 +6,7 @@ import * as schema from '@shared/schema';
 // Later we can use the actual Supabase connection when it's properly formatted
 
 // Create a simple mock client for development
-let client: ReturnType<typeof postgres>;
+export let client: ReturnType<typeof postgres>;
 
 try {
   // Try to connect to the database if credentials are available
