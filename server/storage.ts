@@ -93,8 +93,6 @@ export class SupabaseStorage implements IStorage {
         email: data.email,
         password: data.password,
         name: data.name,
-        fullName: data.full_name,
-        supabaseId: data.supabase_id,
         createdAt: new Date(data.created_at)
       };
     } catch (error) {
@@ -125,8 +123,6 @@ export class SupabaseStorage implements IStorage {
         email: data.email,
         password: data.password,
         name: data.name,
-        fullName: data.full_name,
-        supabaseId: data.supabase_id,
         createdAt: new Date(data.created_at)
       };
     } catch (error) {
@@ -157,8 +153,6 @@ export class SupabaseStorage implements IStorage {
         email: data.email,
         password: data.password,
         name: data.name,
-        fullName: data.full_name,
-        supabaseId: data.supabase_id,
         createdAt: new Date(data.created_at)
       };
     } catch (error) {
@@ -1298,6 +1292,15 @@ export class SupabaseStorage implements IStorage {
 
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
     try {
+      // Reset sequences first to avoid conflicts
+      try {
+        // Reset the invoice_items ID sequence to avoid duplicate key errors
+        await supabase.rpc('reset_invoice_items_sequence');
+        console.log("Reset invoice_items sequence successfully");
+      } catch (seqError) {
+        console.error("Failed to reset invoice_items sequence:", seqError);
+      }
+      
       // Transform to snake_case for Supabase
       // Don't include ID to let Supabase auto-generate it
       const supabaseItem = {
