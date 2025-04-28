@@ -560,8 +560,17 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="font-medium text-gray-600">Billing Address:</p>
-                          <p>{selectedCustomer.billingAddress}</p>
-                          <p>{selectedCustomer.billingCity}, {selectedCustomer.billingState} - {selectedCustomer.billingPincode}</p>
+                          {selectedCustomer.billingAddress ? (
+                            <>
+                              <p>{selectedCustomer.billingAddress || ""}</p>
+                              <p>
+                                {selectedCustomer.billingCity || ""}{selectedCustomer.billingCity ? "," : ""} {selectedCustomer.billingState || ""} 
+                                {selectedCustomer.billingPincode ? " - " + selectedCustomer.billingPincode : ""}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-gray-500 italic">No billing address available</p>
+                          )}
                         </div>
                         <div>
                           <p className="font-medium text-gray-600">Contact:</p>
@@ -572,7 +581,19 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
                               GSTIN: <Badge variant="outline">{selectedCustomer.gstin}</Badge>
                             </p>
                           )}
+                          {!selectedCustomer.email && !selectedCustomer.phone && (
+                            <p className="text-gray-500 italic">No contact details available</p>
+                          )}
                         </div>
+                      </div>
+                      {/* Debug information - remove in production */}
+                      <div className="mt-4 pt-2 border-t border-gray-200 text-xs text-gray-400">
+                        <details>
+                          <summary>Debug customer data</summary>
+                          <pre className="mt-1 p-2 bg-gray-100 rounded overflow-auto max-h-40">
+                            {JSON.stringify(selectedCustomer, null, 2)}
+                          </pre>
+                        </details>
                       </div>
                     </div>
                   )}

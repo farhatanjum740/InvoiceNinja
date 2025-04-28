@@ -81,6 +81,9 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
 
   // Handle product selection
   const handleProductChange = (productId: string) => {
+    console.log("Product selection changed to:", productId);
+    console.log("Available products:", products);
+    
     if (!productId || productId === "custom") {
       // Reset the form fields if "Custom Item" is selected
       form.setValue("description", "");
@@ -91,28 +94,63 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
       return;
     }
 
-    const product = products?.find(p => p.id.toString() === productId);
+    // Try to find the product with additional safety checks
+    let product;
+    try {
+      if (products && Array.isArray(products)) {
+        // Try multiple ways to match the product ID for maximum reliability
+        product = products.find(p => {
+          if (!p || typeof p !== 'object') return false;
+          
+          // Try string comparison first (most reliable)
+          if (String(p.id) === productId) return true;
+          
+          // Try numeric comparison as fallback
+          const numericId = parseInt(productId);
+          return !isNaN(numericId) && p.id === numericId;
+        });
+      }
+    } catch (err) {
+      console.error("Error finding product:", err);
+    }
+    
     if (product) {
-      console.log("Selected product:", product);
+      console.log("Selected product details:", JSON.stringify(product, null, 2));
+      
+      // Set form values with fallbacks for each field
       form.setValue("description", product.name || "");
       form.setValue("hsnCode", product.hsnCode || "");
       form.setValue("unit", product.unit || "Piece");
       
-      // Safely handle rate conversion with fallbacks
-      let rate = 0.01;
+      // Determine rate value with comprehensive fallbacks
+      let rate = 0.01; // Default minimum rate
       try {
-        if (product.rate) {
-          const parsedRate = parseFloat(typeof product.rate === 'string' ? product.rate : product.rate.toString());
+        // First try the schema-correct "rate" field
+        if (product.rate !== undefined && product.rate !== null) {
+          const parsedRate = parseFloat(String(product.rate));
           if (!isNaN(parsedRate)) {
             rate = Math.max(0.01, parsedRate);
+          }
+        } 
+        // Then try the Supabase-returned "price" field if it exists
+        else if ((product as any).price !== undefined && (product as any).price !== null) {
+          const parsedPrice = parseFloat(String((product as any).price));
+          if (!isNaN(parsedPrice)) {
+            rate = Math.max(0.01, parsedPrice);
           }
         }
       } catch (err) {
         console.error("Error parsing product rate:", err);
       }
       
+      console.log("Setting form rate to:", rate);
       form.setValue("rate", rate);
-      form.setValue("gstRate", product.gstRate || 18);
+      
+      // GST rate with fallback
+      const gstRate = product.gstRate !== undefined && product.gstRate !== null ? product.gstRate : 18;
+      form.setValue("gstRate", gstRate);
+    } else {
+      console.warn(`Product with ID ${productId} not found in products list!`);
     }
   };
 
@@ -189,11 +227,24 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="custom">Custom Item</SelectItem>
-                        {products.map((product) => (
-                          <SelectItem key={product.id} value={product.id.toString()}>
-                            {product.name} - {new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(product.rate)}
-                          </SelectItem>
-                        ))}
+                        {products.map((product) => {
+                          // Safely determine the rate for display, checking both rate and price fields
+                          const displayRate = product.rate 
+                            ? parseFloat(typeof product.rate === 'string' ? product.rate : String(product.rate))
+                            : (product.price 
+                              ? parseFloat(typeof product.price === 'string' ? product.price : String(product.price))
+                              : 0);
+                          
+                          const formattedPrice = !isNaN(displayRate)
+                            ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(displayRate)
+                            : "₹0.00";
+                            
+                          return (
+                            <SelectItem key={product.id} value={String(product.id)}>
+                              {product.name} - {formattedPrice}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <FormMessage />
