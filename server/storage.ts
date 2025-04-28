@@ -168,9 +168,7 @@ export class SupabaseStorage implements IStorage {
         username: insertUser.username,
         email: insertUser.email,
         password: insertUser.password,
-        name: insertUser.name,
-        full_name: insertUser.fullName,
-        supabase_id: insertUser.supabaseId
+        name: insertUser.name
       };
       
       const { data, error } = await supabase
@@ -191,8 +189,6 @@ export class SupabaseStorage implements IStorage {
         email: data.email,
         password: data.password,
         name: data.name,
-        fullName: data.full_name,
-        supabaseId: data.supabase_id,
         createdAt: new Date(data.created_at)
       };
     } catch (error) {
