@@ -63,7 +63,7 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
       hsnCode: "",
       unit: "Piece",
       quantity: 1,
-      rate: 0,
+      rate: 1, // Set a default rate greater than 0
       gstRate: 18,
     },
   });
@@ -80,7 +80,7 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
       form.setValue("description", "");
       form.setValue("hsnCode", "");
       form.setValue("unit", "Piece");
-      form.setValue("rate", 0);
+      form.setValue("rate", 1); // Set a valid default rate
       form.setValue("gstRate", 18);
       return;
     }
@@ -90,17 +90,27 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
       form.setValue("description", product.name);
       form.setValue("hsnCode", product.hsnCode || "");
       form.setValue("unit", product.unit);
-      form.setValue("rate", product.rate);
+      // Ensure we have a valid rate (at least 0.01)
+      form.setValue("rate", Math.max(0.01, parseFloat(product.rate.toString() || "1")));
       form.setValue("gstRate", product.gstRate);
     }
   };
 
   // Form submission handler
   const onSubmit = (values: z.infer<typeof invoiceItemFormSchema>) => {
-    // Calculate amount with proper precision
-    const quantity = parseFloat(values.quantity.toString());
-    const rate = parseFloat(values.rate.toString());
+    // Calculate amount with proper precision - ensure values are valid
+    const quantity = Math.max(0.01, parseFloat(values.quantity.toString()));
+    const rate = Math.max(0.01, parseFloat(values.rate.toString()));
     const calcAmount = quantity * rate;
+    
+    // Validate the minimum required values
+    if (rate <= 0 || quantity <= 0) {
+      form.setError("rate", { 
+        type: "manual", 
+        message: "Rate must be greater than 0" 
+      });
+      return;
+    }
     
     // Create invoice item with properly calculated and rounded amount
     const itemData = {
@@ -114,6 +124,9 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
       productId: values.productId && values.productId !== "custom" ? parseInt(values.productId) : undefined
     };
 
+    // Debug info
+    console.log("Adding item to invoice:", itemData);
+    
     onAddItem(itemData);
     form.reset();
     setIsDialogOpen(false);
@@ -256,12 +269,11 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
                     <FormControl>
                       <Input
                         type="number"
-                        min="0.01"
+                        min="0.01" 
                         step="0.01"
                         placeholder="Enter rate"
                         {...field}
-                        value={field.value}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
                       />
                     </FormControl>
                     <FormMessage />
