@@ -1,5 +1,5 @@
 import { type User, type InsertUser, type Company, type InsertCompany, type Customer, type InsertCustomer, type Product, type InsertProduct, type Invoice, type InsertInvoice, type InvoiceItem, type InsertInvoiceItem } from "@shared/schema";
-import { supabase } from "./db";
+import { supabase, refreshSupabaseSchemaCache } from "./db";
 import session from "express-session";
 import MemoryStore from "memorystore";
 import { Pool } from "@neondatabase/serverless";

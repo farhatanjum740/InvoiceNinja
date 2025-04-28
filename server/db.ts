@@ -76,8 +76,16 @@ export async function updateSupabaseSchema() {
     // Make sure schema is up to date
     await refreshSupabaseSchemaCache();
     
+    // Forcibly reset PostgREST schema cache by directly querying all invoice_items columns
+    try {
+      // This query specifically targets the schema cache issue with the 'unit' column
+      await supabase.from('invoice_items').select('id, invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code').limit(1);
+      console.log('Forced specific column schema refresh for invoice_items');
+    } catch (forceError) {
+      console.warn('Could not force schema refresh for invoice_items:', forceError);
+    }
+    
     // Force working around Supabase schema cache issues by temporarily bypassing it
-    // This modifies how we work with invoice items to avoid the schema cache error
     console.log('Setting up workaround for invoice items creation...');
     
     return true;
