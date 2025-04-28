@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useEffect } from "react";
 import {
   useQuery,
   useMutation,
@@ -7,6 +7,7 @@ import {
 import { InsertUser, User as SelectUser } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "../lib/supabase";
 
 // Define the types we need for auth
 type User = SelectUser;
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     error,
     isLoading,
+    refetch,
   } = useQuery<User | undefined, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
@@ -47,6 +49,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refetchOnWindowFocus: true,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+  
+  // Subscribe to Supabase auth changes
+  useEffect(() => {
+    // Set up Supabase auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Supabase auth event:", event);
+        
+        if (event === 'SIGNED_IN') {
+          // User signed in via Supabase, refresh our user data
+          refetch();
+        } else if (event === 'SIGNED_OUT') {
+          // User signed out via Supabase, clear our user data
+          queryClient.setQueryData(["/api/user"], null);
+        }
+      }
+    );
+    
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [refetch]);
 
   // Login mutation
   const loginMutation = useMutation({
@@ -96,17 +121,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Logout mutation
+  // Logout mutation - also sign out from Supabase
   const logoutMutation = useMutation({
     mutationFn: async () => {
+      // First, call our server API to clear the session
       await apiRequest("POST", "/api/logout");
+      
+      // Also sign out from Supabase on the client side
+      try {
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.error("Supabase client-side signout error:", error);
+        // Continue even if Supabase logout fails
+      }
     },
     onSuccess: () => {
+      // Clear user data from the React Query cache
       queryClient.setQueryData(["/api/user"], null);
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
       });
+      
+      // Redirect to login page
+      window.location.href = "/auth";
     },
     onError: (error: Error) => {
       toast({

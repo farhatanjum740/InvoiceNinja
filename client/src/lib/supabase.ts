@@ -1,14 +1,58 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY as string;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase environment variables. Please check your configuration.');
+// Dynamically fetch Supabase configuration from server
+async function fetchSupabaseConfig() {
+  try {
+    const response = await fetch('/api/env');
+    if (!response.ok) {
+      throw new Error('Failed to fetch Supabase configuration');
+    }
+    
+    const data = await response.json();
+    return {
+      url: data.VITE_SUPABASE_URL,
+      key: data.VITE_SUPABASE_KEY
+    };
+  } catch (error) {
+    console.error('Error fetching Supabase configuration:', error);
+    
+    // Fallback to environment variables if server fetch fails
+    return {
+      url: import.meta.env.VITE_SUPABASE_URL as string,
+      key: import.meta.env.VITE_SUPABASE_KEY as string
+    };
+  }
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Initialize with empty values first, will be updated after config is fetched
+let supabaseUrl = '';
+let supabaseKey = '';
+
+// Create the client with default config initially
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseKey || 'placeholder'
+);
+
+// Update the Supabase client with proper configuration
+// This is called immediately and the promise is handled
+(async () => {
+  try {
+    const config = await fetchSupabaseConfig();
+    supabaseUrl = config.url;
+    supabaseKey = config.key;
+    
+    // Update the Supabase client if we have valid config
+    if (supabaseUrl && supabaseKey) {
+      Object.assign(supabase, createClient(supabaseUrl, supabaseKey));
+      console.log('Supabase client initialized successfully');
+    } else {
+      console.error('Missing Supabase configuration. Authentication and storage features may not work.');
+    }
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error);
+  }
+})();
 
 // Storage bucket names
 export const STORAGE_BUCKETS = {
