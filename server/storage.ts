@@ -252,22 +252,27 @@ export class DatabaseStorage implements IStorage {
 
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
     try {
+      // First create in PostgreSQL to get a unique ID
+      const [newCustomer] = await db.insert(customers).values(customer).returning();
+      
+      // Now with the ID, create in Supabase
       // Transform to snake_case for Supabase
       const supabaseCustomer = {
-        user_id: customer.userId,
-        name: customer.name,
-        email: customer.email,
-        phone: customer.phone,
-        gstin: customer.gstin,
-        billing_address: customer.billingAddress,
-        billing_city: customer.billingCity,
-        billing_state: customer.billingState,
-        billing_pincode: customer.billingPincode,
-        shipping_address: customer.shippingAddress,
-        shipping_city: customer.shippingCity,
-        shipping_state: customer.shippingState,
-        shipping_pincode: customer.shippingPincode,
-        same_as_shipping: customer.sameAsShipping
+        id: newCustomer.id, // Use the same ID
+        user_id: newCustomer.userId,
+        name: newCustomer.name,
+        email: newCustomer.email,
+        phone: newCustomer.phone,
+        gstin: newCustomer.gstin,
+        billing_address: newCustomer.billingAddress,
+        billing_city: newCustomer.billingCity,
+        billing_state: newCustomer.billingState,
+        billing_pincode: newCustomer.billingPincode,
+        shipping_address: newCustomer.shippingAddress,
+        shipping_city: newCustomer.shippingCity,
+        shipping_state: newCustomer.shippingState,
+        shipping_pincode: newCustomer.shippingPincode,
+        same_as_shipping: newCustomer.sameAsShipping
       };
       
       // Insert using Supabase
@@ -279,8 +284,7 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase customer insert error:", error);
-        // Fall back to direct DB insert
-        const [newCustomer] = await db.insert(customers).values(customer).returning();
+        // Already created in PostgreSQL, so return that
         return newCustomer;
       }
       
@@ -304,7 +308,7 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error creating customer:", error);
-      // Fall back to direct DB insert
+      // Try direct DB insert as last resort
       const [newCustomer] = await db.insert(customers).values(customer).returning();
       return newCustomer;
     }
@@ -312,39 +316,49 @@ export class DatabaseStorage implements IStorage {
 
   async updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined> {
     try {
-      // Transform to snake_case for Supabase
-      const supabaseCustomer: Record<string, any> = {};
-      if (customer.userId !== undefined) supabaseCustomer.user_id = customer.userId;
-      if (customer.name !== undefined) supabaseCustomer.name = customer.name;
-      if (customer.email !== undefined) supabaseCustomer.email = customer.email;
-      if (customer.phone !== undefined) supabaseCustomer.phone = customer.phone;
-      if (customer.gstin !== undefined) supabaseCustomer.gstin = customer.gstin;
-      if (customer.billingAddress !== undefined) supabaseCustomer.billing_address = customer.billingAddress;
-      if (customer.billingCity !== undefined) supabaseCustomer.billing_city = customer.billingCity;
-      if (customer.billingState !== undefined) supabaseCustomer.billing_state = customer.billingState;
-      if (customer.billingPincode !== undefined) supabaseCustomer.billing_pincode = customer.billingPincode;
-      if (customer.shippingAddress !== undefined) supabaseCustomer.shipping_address = customer.shippingAddress;
-      if (customer.shippingCity !== undefined) supabaseCustomer.shipping_city = customer.shippingCity;
-      if (customer.shippingState !== undefined) supabaseCustomer.shipping_state = customer.shippingState;
-      if (customer.shippingPincode !== undefined) supabaseCustomer.shipping_pincode = customer.shippingPincode;
-      if (customer.sameAsShipping !== undefined) supabaseCustomer.same_as_shipping = customer.sameAsShipping;
+      // First update in PostgreSQL
+      const [updatedCustomer] = await db
+        .update(customers)
+        .set(customer)
+        .where(eq(customers.id, id))
+        .returning();
       
-      // Update using Supabase
+      if (!updatedCustomer) {
+        return undefined;
+      }
+      
+      // Then update in Supabase using upsert
+      // Transform to snake_case for Supabase
+      const supabaseCustomer = {
+        id: updatedCustomer.id,
+        user_id: updatedCustomer.userId,
+        name: updatedCustomer.name,
+        email: updatedCustomer.email,
+        phone: updatedCustomer.phone,
+        gstin: updatedCustomer.gstin,
+        billing_address: updatedCustomer.billingAddress,
+        billing_city: updatedCustomer.billingCity,
+        billing_state: updatedCustomer.billingState,
+        billing_pincode: updatedCustomer.billingPincode,
+        shipping_address: updatedCustomer.shippingAddress,
+        shipping_city: updatedCustomer.shippingCity,
+        shipping_state: updatedCustomer.shippingState,
+        shipping_pincode: updatedCustomer.shippingPincode,
+        same_as_shipping: updatedCustomer.sameAsShipping
+      };
+      
+      // Update using Supabase (use upsert in case it doesn't exist in Supabase yet)
       const { data, error } = await supabase
         .from('customers')
-        .update(supabaseCustomer)
-        .eq('id', id)
+        .upsert(supabaseCustomer)
         .select()
         .single();
         
       if (error) {
         console.error("Supabase customer update error:", error);
-        // Fall back to direct DB update
-        const [updatedCustomer] = await db.update(customers).set(customer).where(eq(customers.id, id)).returning();
+        // Already updated in PostgreSQL, so return that
         return updatedCustomer;
       }
-      
-      if (!data) return undefined;
       
       // Transform back to camelCase
       return {
@@ -374,22 +388,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCustomer(id: number): Promise<boolean> {
     try {
-      // Delete using Supabase
+      // First delete from PostgreSQL
+      const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
+      
+      if (!deletedCustomer) {
+        return false;
+      }
+      
+      // Then delete from Supabase
       const { error } = await supabase.from('customers').delete().eq('id', id);
         
       if (error) {
         console.error("Supabase customer delete error:", error);
-        // Fall back to direct DB delete
-        const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
-        return !!deletedCustomer;
+        // Already deleted from PostgreSQL, so consider it a success
+        return true;
       }
       
       return true;
     } catch (error) {
       console.error("Error deleting customer:", error);
-      // Fall back to direct DB delete
-      const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
-      return !!deletedCustomer;
+      // Try direct DB delete as last resort
+      try {
+        const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
+        return !!deletedCustomer;
+      } catch (dbError) {
+        console.error("PostgreSQL delete error:", dbError);
+        return false;
+      }
     }
   }
 
