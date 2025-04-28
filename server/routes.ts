@@ -380,53 +380,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Log the received invoice data for debugging
       const { invoice, items } = req.body;
-      console.log("Received invoice data:", {
-        invoice: {
-          ...invoice,
-          userId: req.user.id
-        },
-        itemsCount: items ? items.length : 0
-      });
+      console.log("Attempting to create invoice with", items?.length || 0, "items");
       
       // Validate that we have items
       if (!items || items.length === 0) {
         return res.status(400).json({ error: "No invoice items provided" });
       }
       
-      // Create the invoice with explicit try/catch for better debugging
+      // Ensure user ID is set
+      const invoiceWithUserId = {
+        ...invoice,
+        userId: req.user.id
+      };
+      
+      console.log("Using transaction-based invoice creation method");
+      
       try {
-        const newInvoice = await storage.createInvoice(
-          {
-            ...invoice,
-            userId: req.user.id
-          },
-          items
-        );
+        const newInvoice = await storage.createInvoice(invoiceWithUserId, items);
         
-        console.log("Invoice created successfully:", newInvoice.id);
+        console.log("Invoice created successfully with ID:", newInvoice.id);
         return res.status(201).json(newInvoice);
       } catch (invoiceError: any) {
         // More detailed error reporting for invoice creation failures
         console.error("Invoice creation failed:", invoiceError.message || invoiceError);
         
-        if (invoiceError.message && invoiceError.message.includes("unit")) {
-          return res.status(500).json({ 
-            error: "Database schema error with 'unit' column. Schema needs to be updated." 
-          });
-        }
-        
         return res.status(500).json({ 
           error: "Invoice creation failed", 
-          message: invoiceError.message || "Unknown error",
-          stack: process.env.NODE_ENV === 'development' ? invoiceError.stack : undefined
+          message: invoiceError.message || "Unknown error"
         });
       }
     } catch (error: any) {
       console.error("Error processing invoice request:", error);
       return res.status(500).json({ 
         error: "Server error", 
-        message: error.message || "Unknown error",
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        message: error.message || "Unknown error"
       });
     }
   });
