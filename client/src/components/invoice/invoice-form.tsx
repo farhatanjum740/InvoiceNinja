@@ -220,7 +220,27 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     const id = parseInt(customerId);
     form.setValue("customerId", id);
     const customer = customers?.find(c => c.id === id);
-    setSelectedCustomer(customer);
+    
+    if (customer) {
+      console.log("Selected customer:", customer);
+      
+      // Set customer details to the form
+      setSelectedCustomer(customer);
+      
+      // Update the shipping address fields if they exist in the form
+      try {
+        // Check if these form fields exist before setting them
+        if (form.getValues().hasOwnProperty("shippingAddress")) {
+          form.setValue("shippingAddress", customer.billingAddress || "");
+          form.setValue("shippingCity", customer.billingCity || "");
+          form.setValue("shippingState", customer.billingState || "");
+          form.setValue("shippingPincode", customer.billingPincode || "");
+        }
+      } catch (error) {
+        console.error("Error setting customer shipping details:", error);
+      }
+    }
+    
     // Save form state after customer change
     setTimeout(saveFormState, 0);
   };

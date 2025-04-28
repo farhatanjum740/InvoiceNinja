@@ -93,12 +93,26 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
 
     const product = products?.find(p => p.id.toString() === productId);
     if (product) {
-      form.setValue("description", product.name);
+      console.log("Selected product:", product);
+      form.setValue("description", product.name || "");
       form.setValue("hsnCode", product.hsnCode || "");
-      form.setValue("unit", product.unit);
-      // Ensure we have a valid rate (at least 0.01)
-      form.setValue("rate", Math.max(0.01, parseFloat(product.rate.toString() || "1")));
-      form.setValue("gstRate", product.gstRate);
+      form.setValue("unit", product.unit || "Piece");
+      
+      // Safely handle rate conversion with fallbacks
+      let rate = 0.01;
+      try {
+        if (product.rate) {
+          const parsedRate = parseFloat(typeof product.rate === 'string' ? product.rate : product.rate.toString());
+          if (!isNaN(parsedRate)) {
+            rate = Math.max(0.01, parsedRate);
+          }
+        }
+      } catch (err) {
+        console.error("Error parsing product rate:", err);
+      }
+      
+      form.setValue("rate", rate);
+      form.setValue("gstRate", product.gstRate || 18);
     }
   };
 
