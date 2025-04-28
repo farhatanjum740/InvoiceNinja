@@ -1,30 +1,31 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
-import * as schema from "@shared/schema";
-import { supabase } from './supabase';
+import * as schema from '@shared/schema';
 
-// For direct database access with Drizzle ORM
-if (!process.env.SUPABASE_POSTGRES_URL) {
+// For Supabase, we're using the postgres connection string
+const postgresUrl = process.env.SUPABASE_POSTGRES_URL || process.env.DATABASE_URL;
+
+// Validate connection string
+if (!postgresUrl) {
   throw new Error(
-    "SUPABASE_POSTGRES_URL must be set. Check your Supabase project settings for the connection string.",
+    "SUPABASE_POSTGRES_URL must be set. Check your Supabase project settings for the connection string."
   );
 }
 
-// Create a Postgres client
-export const client = postgres(process.env.SUPABASE_POSTGRES_URL);
+// Create postgres client
+export const client = postgres(postgresUrl);
 
-// Create Drizzle ORM instance
+// Create drizzle client
 export const db = drizzle(client, { schema });
 
-// Helper function to check database connection
+// Export a function to check database connection
 export async function checkDatabaseConnection() {
   try {
-    const result = await db.execute(sql`SELECT 1 AS connected`);
-    console.log('Database connection successful:', result);
-    return true;
+    // Run a simple query to check connection
+    const result = await client`SELECT 1 as connected`;
+    return result?.[0]?.connected === 1;
   } catch (error) {
-    console.error('Database connection failed:', error);
+    console.error('Database connection error:', error);
     return false;
   }
 }

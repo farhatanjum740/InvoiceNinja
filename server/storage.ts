@@ -1,9 +1,9 @@
 import { users, type User, type InsertUser, companies, type Company, type InsertCompany, customers, type Customer, type InsertCustomer, products, type Product, type InsertProduct, invoices, type Invoice, type InsertInvoice, invoiceItems, type InvoiceItem, type InsertInvoiceItem } from "@shared/schema";
-import { db } from "./db";
+import { db, client } from "./db";
 import { eq, and, desc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { pool } from "./db";
+import MemoryStore from "memorystore";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -64,10 +64,19 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({ 
-      pool, 
-      createTableIfMissing: true 
+    // For now, use a memory store as we're setting up Supabase
+    const MemStore = MemoryStore(session);
+    this.sessionStore = new MemStore({
+      checkPeriod: 86400000 // 24 hours
     });
+    
+    // When we switch fully to Supabase/Postgres, we'll use this:
+    // this.sessionStore = new PostgresSessionStore({ 
+    //   conObject: {
+    //     connectionString: process.env.SUPABASE_POSTGRES_URL || process.env.DATABASE_URL,
+    //   },
+    //   createTableIfMissing: true 
+    // });
   }
 
   async getUser(id: number): Promise<User | undefined> {
