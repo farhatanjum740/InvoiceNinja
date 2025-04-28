@@ -2,7 +2,7 @@ import { Request, Response, NextFunction, Express } from "express";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
 import { storage } from "./storage";
-import { supabase } from "./supabase";
+import { supabase } from "./db";
 import session from "express-session";
 
 // Extend Express session definitions
