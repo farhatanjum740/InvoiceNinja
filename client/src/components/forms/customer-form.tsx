@@ -125,7 +125,7 @@ export function CustomerForm({ customer, onSuccess }: CustomerFormProps) {
   // Update customer mutation
   const updateCustomerMutation = useMutation({
     mutationFn: async (data: z.infer<typeof customerFormSchema>) => {
-      const response = await apiRequest("PUT", `/api/customers/${customer.id}`, data);
+      const response = await apiRequest("PATCH", `/api/customers/${customer.id}`, data);
       return await response.json();
     },
     onSuccess: () => {

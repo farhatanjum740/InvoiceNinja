@@ -159,6 +159,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedCustomer = await storage.updateCustomer(customerId, req.body);
       
+      if (!updatedCustomer) {
+        return res.status(404).json({ error: "Customer not found or update failed" });
+      }
+      
       return res.json(updatedCustomer);
     } catch (error) {
       console.error("Error updating customer:", error);
