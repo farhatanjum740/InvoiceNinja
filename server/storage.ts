@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, companies, type Company, type InsertCompany, customers, type Customer, type InsertCustomer, products, type Product, type InsertProduct, invoices, type Invoice, type InsertInvoice, invoiceItems, type InvoiceItem, type InsertInvoiceItem } from "@shared/schema";
+import { type User, type InsertUser, type Company, type InsertCompany, type Customer, type InsertCustomer, type Product, type InsertProduct, type Invoice, type InsertInvoice, type InvoiceItem, type InsertInvoiceItem } from "@shared/schema";
 import { supabase } from "./db";
 import session from "express-session";
 import MemoryStore from "memorystore";
@@ -740,99 +740,440 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
-    return db.select().from(invoices)
-      .where(eq(invoices.userId, userId))
-      .orderBy(desc(invoices.id));  // Using ID instead of createdAt which doesn't exist
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('user_id', userId)
+        .order('id', { ascending: false });
+        
+      if (error) {
+        console.error("Supabase invoices fetch error:", error);
+        return [];
+      }
+      
+      // Transform Supabase snake_case to camelCase
+      return data.map((i: any) => ({
+        id: i.id,
+        userId: i.user_id,
+        customerId: i.customer_id,
+        invoiceNumber: i.invoice_number,
+        date: i.date,
+        dueDate: i.due_date,
+        notes: i.notes || null,
+        status: i.status,
+        subtotal: i.subtotal,
+        tax: i.tax,
+        discount: i.discount,
+        total: i.total,
+        termsAndConditions: i.terms_and_conditions || null
+      }));
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      return [];
+    }
   }
 
   async getInvoice(id: number): Promise<Invoice | undefined> {
-    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
-    return invoice;
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (error) {
+        console.error("Supabase invoice fetch error:", error);
+        return undefined;
+      }
+      
+      if (!data) return undefined;
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        customerId: data.customer_id,
+        invoiceNumber: data.invoice_number,
+        date: data.date,
+        dueDate: data.due_date,
+        notes: data.notes || null,
+        status: data.status,
+        subtotal: data.subtotal,
+        tax: data.tax,
+        discount: data.discount,
+        total: data.total,
+        termsAndConditions: data.terms_and_conditions || null
+      };
+    } catch (error) {
+      console.error("Error fetching invoice:", error);
+      return undefined;
+    }
   }
 
   async getInvoiceWithItems(id: number): Promise<{ invoice: Invoice; items: InvoiceItem[] }> {
-    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
-    
-    if (!invoice) {
-      throw new Error('Invoice not found');
+    try {
+      // Get the invoice
+      const { data: invoiceData, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (invoiceError) {
+        console.error("Supabase invoice fetch error:", invoiceError);
+        throw new Error('Invoice not found');
+      }
+      
+      if (!invoiceData) {
+        throw new Error('Invoice not found');
+      }
+      
+      // Get the invoice items
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', id);
+        
+      if (itemsError) {
+        console.error("Supabase invoice items fetch error:", itemsError);
+        throw new Error('Error fetching invoice items');
+      }
+      
+      // Transform Supabase snake_case to camelCase for invoice
+      const invoice = {
+        id: invoiceData.id,
+        userId: invoiceData.user_id,
+        customerId: invoiceData.customer_id,
+        invoiceNumber: invoiceData.invoice_number,
+        date: invoiceData.date,
+        dueDate: invoiceData.due_date,
+        notes: invoiceData.notes || null,
+        status: invoiceData.status,
+        subtotal: invoiceData.subtotal,
+        tax: invoiceData.tax,
+        discount: invoiceData.discount,
+        total: invoiceData.total,
+        termsAndConditions: invoiceData.terms_and_conditions || null
+      };
+      
+      // Transform Supabase snake_case to camelCase for items
+      const items = itemsData.map((item: any) => ({
+        id: item.id,
+        invoiceId: item.invoice_id,
+        productId: item.product_id,
+        description: item.description,
+        quantity: item.quantity,
+        rate: item.rate,
+        amount: item.amount,
+        gstRate: item.gst_rate
+      }));
+      
+      return { invoice, items };
+    } catch (error) {
+      console.error("Error fetching invoice with items:", error);
+      throw error;
     }
-    
-    const items = await db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, id));
-    
-    return {
-      invoice,
-      items
-    };
   }
 
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
-    // Start a transaction
-    return await db.transaction(async (tx) => {
-      // Insert invoice
-      const [newInvoice] = await tx.insert(invoices).values(invoice).returning();
+    try {
+      // Transform invoice to snake_case for Supabase
+      const supabaseInvoice = {
+        user_id: invoice.userId,
+        customer_id: invoice.customerId,
+        invoice_number: invoice.invoiceNumber,
+        date: invoice.date,
+        due_date: invoice.dueDate,
+        notes: invoice.notes,
+        status: invoice.status,
+        subtotal: invoice.subtotal,
+        tax: invoice.tax,
+        discount: invoice.discount,
+        total: invoice.total,
+        terms_and_conditions: invoice.termsAndConditions
+      };
       
-      // Insert all invoice items with the new invoice ID
-      if (items.length > 0) {
-        const itemsWithInvoiceId = items.map(item => ({
-          ...item,
-          invoiceId: newInvoice.id
-        }));
+      // Insert invoice using Supabase
+      const { data: invoiceData, error: invoiceError } = await supabase
+        .from('invoices')
+        .insert(supabaseInvoice)
+        .select()
+        .single();
         
-        await tx.insert(invoiceItems).values(itemsWithInvoiceId);
+      if (invoiceError) {
+        console.error("Supabase invoice insert error:", invoiceError);
+        throw invoiceError;
       }
       
-      return newInvoice;
-    });
+      // If there are items, insert them with the new invoice ID
+      if (items.length > 0) {
+        // Transform items to snake_case for Supabase
+        const supabaseItems = items.map(item => ({
+          invoice_id: invoiceData.id,
+          product_id: item.productId,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount,
+          gst_rate: item.gstRate
+        }));
+        
+        // Insert all items
+        const { error: itemsError } = await supabase
+          .from('invoice_items')
+          .insert(supabaseItems);
+          
+        if (itemsError) {
+          console.error("Supabase invoice items insert error:", itemsError);
+          // Consider rolling back invoice if items fail (by deleting the invoice)
+          await supabase.from('invoices').delete().eq('id', invoiceData.id);
+          throw itemsError;
+        }
+      }
+      
+      // Transform back to camelCase
+      return {
+        id: invoiceData.id,
+        userId: invoiceData.user_id,
+        customerId: invoiceData.customer_id,
+        invoiceNumber: invoiceData.invoice_number,
+        date: invoiceData.date,
+        dueDate: invoiceData.due_date,
+        notes: invoiceData.notes || null,
+        status: invoiceData.status,
+        subtotal: invoiceData.subtotal,
+        tax: invoiceData.tax,
+        discount: invoiceData.discount,
+        total: invoiceData.total,
+        termsAndConditions: invoiceData.terms_and_conditions || null
+      };
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      throw error;
+    }
   }
 
   async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
-    const [updatedInvoice] = await db
-      .update(invoices)
-      .set(invoice)
-      .where(eq(invoices.id, id))
-      .returning();
-    return updatedInvoice;
+    try {
+      // Convert partial invoice from camelCase to snake_case
+      const supabaseInvoice: Record<string, any> = {};
+      
+      if ('userId' in invoice) supabaseInvoice.user_id = invoice.userId;
+      if ('customerId' in invoice) supabaseInvoice.customer_id = invoice.customerId;
+      if ('invoiceNumber' in invoice) supabaseInvoice.invoice_number = invoice.invoiceNumber;
+      if ('date' in invoice) supabaseInvoice.date = invoice.date;
+      if ('dueDate' in invoice) supabaseInvoice.due_date = invoice.dueDate;
+      if ('notes' in invoice) supabaseInvoice.notes = invoice.notes;
+      if ('status' in invoice) supabaseInvoice.status = invoice.status;
+      if ('subtotal' in invoice) supabaseInvoice.subtotal = invoice.subtotal;
+      if ('tax' in invoice) supabaseInvoice.tax = invoice.tax;
+      if ('discount' in invoice) supabaseInvoice.discount = invoice.discount;
+      if ('total' in invoice) supabaseInvoice.total = invoice.total;
+      if ('termsAndConditions' in invoice) supabaseInvoice.terms_and_conditions = invoice.termsAndConditions;
+      
+      // Update using Supabase
+      const { data, error } = await supabase
+        .from('invoices')
+        .update(supabaseInvoice)
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase invoice update error:", error);
+        return undefined;
+      }
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        customerId: data.customer_id,
+        invoiceNumber: data.invoice_number,
+        date: data.date,
+        dueDate: data.due_date,
+        notes: data.notes || null,
+        status: data.status,
+        subtotal: data.subtotal,
+        tax: data.tax,
+        discount: data.discount,
+        total: data.total,
+        termsAndConditions: data.terms_and_conditions || null
+      };
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      return undefined;
+    }
   }
 
   async deleteInvoice(id: number): Promise<boolean> {
-    return await db.transaction(async (tx) => {
-      // Delete associated invoice items first
-      await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, id));
+    try {
+      // First delete all associated invoice items
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', id);
+        
+      if (itemsError) {
+        console.error("Supabase invoice items delete error:", itemsError);
+        return false;
+      }
       
       // Then delete the invoice
-      const [deletedInvoice] = await tx
-        .delete(invoices)
-        .where(eq(invoices.id, id))
-        .returning();
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Supabase invoice delete error:", error);
+        return false;
+      }
       
-      return !!deletedInvoice;
-    });
+      return true;
+    } catch (error) {
+      console.error("Error deleting invoice:", error);
+      return false;
+    }
   }
 
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
-    return db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
+    try {
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId);
+        
+      if (error) {
+        console.error("Supabase invoice items fetch error:", error);
+        return [];
+      }
+      
+      // Transform Supabase snake_case to camelCase
+      return data.map((item: any) => ({
+        id: item.id,
+        invoiceId: item.invoice_id,
+        productId: item.product_id,
+        description: item.description,
+        quantity: item.quantity,
+        rate: item.rate,
+        amount: item.amount,
+        gstRate: item.gst_rate,
+        hsnCode: item.hsn_code || null  // Added based on schema
+      }));
+    } catch (error) {
+      console.error("Error fetching invoice items:", error);
+      return [];
+    }
   }
 
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
-    const [newItem] = await db.insert(invoiceItems).values(item).returning();
-    return newItem;
+    try {
+      // Transform to snake_case for Supabase
+      const supabaseItem = {
+        invoice_id: item.invoiceId,
+        product_id: item.productId,
+        description: item.description,
+        quantity: item.quantity,
+        rate: item.rate,
+        amount: item.amount,
+        gst_rate: item.gstRate,
+        hsn_code: item.hsnCode
+      };
+      
+      // Insert using Supabase
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .insert(supabaseItem)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase invoice item insert error:", error);
+        throw error;
+      }
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        invoiceId: data.invoice_id,
+        productId: data.product_id,
+        description: data.description,
+        quantity: data.quantity,
+        rate: data.rate,
+        amount: data.amount,
+        gstRate: data.gst_rate,
+        hsnCode: data.hsn_code || null
+      };
+    } catch (error) {
+      console.error("Error adding invoice item:", error);
+      throw error;
+    }
   }
 
   async updateInvoiceItem(id: number, item: Partial<InsertInvoiceItem>): Promise<InvoiceItem | undefined> {
-    const [updatedItem] = await db
-      .update(invoiceItems)
-      .set(item)
-      .where(eq(invoiceItems.id, id))
-      .returning();
-    return updatedItem;
+    try {
+      // Convert partial item from camelCase to snake_case
+      const supabaseItem: Record<string, any> = {};
+      
+      if ('invoiceId' in item) supabaseItem.invoice_id = item.invoiceId;
+      if ('productId' in item) supabaseItem.product_id = item.productId;
+      if ('description' in item) supabaseItem.description = item.description;
+      if ('quantity' in item) supabaseItem.quantity = item.quantity;
+      if ('rate' in item) supabaseItem.rate = item.rate;
+      if ('amount' in item) supabaseItem.amount = item.amount;
+      if ('gstRate' in item) supabaseItem.gst_rate = item.gstRate;
+      if ('hsnCode' in item) supabaseItem.hsn_code = item.hsnCode;
+      
+      // Update using Supabase
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .update(supabaseItem)
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase invoice item update error:", error);
+        return undefined;
+      }
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        invoiceId: data.invoice_id,
+        productId: data.product_id,
+        description: data.description,
+        quantity: data.quantity,
+        rate: data.rate,
+        amount: data.amount,
+        gstRate: data.gst_rate,
+        hsnCode: data.hsn_code || null
+      };
+    } catch (error) {
+      console.error("Error updating invoice item:", error);
+      return undefined;
+    }
   }
 
   async deleteInvoiceItem(id: number): Promise<boolean> {
-    const [deletedItem] = await db
-      .delete(invoiceItems)
-      .where(eq(invoiceItems.id, id))
-      .returning();
-    return !!deletedItem;
+    try {
+      const { error } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Supabase invoice item delete error:", error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error deleting invoice item:", error);
+      return false;
+    }
   }
 
   async getInvoiceStats(userId: number): Promise<{
@@ -841,30 +1182,55 @@ export class SupabaseStorage implements IStorage {
     unpaidInvoices: number;
     totalCustomers: number;
   }> {
-    // Get total number of invoices
-    const invoicesResult = await db
-      .select()
-      .from(invoices)
-      .where(eq(invoices.userId, userId));
-    
-    // Calculate total revenue
-    const totalRevenue = invoicesResult.reduce((sum, invoice) => sum + Number(invoice.total), 0);
-    
-    // Count unpaid invoices (status is pending)
-    const unpaidInvoices = invoicesResult.filter(invoice => invoice.status === 'pending').length;
-    
-    // Count total customers
-    const customersResult = await db
-      .select()
-      .from(customers)
-      .where(eq(customers.userId, userId));
-    
-    return {
-      totalInvoices: invoicesResult.length,
-      totalRevenue: totalRevenue,
-      unpaidInvoices: unpaidInvoices,
-      totalCustomers: customersResult.length
-    };
+    try {
+      // Get all invoices for the user
+      const { data: invoicesResult, error: invoicesError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('user_id', userId);
+        
+      if (invoicesError) {
+        console.error("Supabase invoices fetch error:", invoicesError);
+        return { totalInvoices: 0, totalRevenue: 0, unpaidInvoices: 0, totalCustomers: 0 };
+      }
+      
+      // Calculate total revenue
+      const totalRevenue = invoicesResult.reduce(
+        (sum, invoice) => sum + Number(invoice.total), 
+        0
+      );
+      
+      // Count unpaid invoices (status is pending)
+      const unpaidInvoices = invoicesResult.filter(
+        invoice => invoice.status === 'pending'
+      ).length;
+      
+      // Count total customers
+      const { data: customersResult, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', userId);
+        
+      if (customersError) {
+        console.error("Supabase customers fetch error:", customersError);
+        return { 
+          totalInvoices: invoicesResult.length, 
+          totalRevenue, 
+          unpaidInvoices, 
+          totalCustomers: 0 
+        };
+      }
+      
+      return {
+        totalInvoices: invoicesResult.length,
+        totalRevenue: totalRevenue,
+        unpaidInvoices: unpaidInvoices,
+        totalCustomers: customersResult.length
+      };
+    } catch (error) {
+      console.error("Error fetching invoice stats:", error);
+      return { totalInvoices: 0, totalRevenue: 0, unpaidInvoices: 0, totalCustomers: 0 };
+    }
   }
 }
 
