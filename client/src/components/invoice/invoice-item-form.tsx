@@ -20,6 +20,12 @@ const invoiceItemFormSchema = z.object({
   quantity: z.coerce.number().min(0.01, "Quantity must be greater than 0"),
   rate: z.coerce.number().min(0.01, "Rate must be greater than 0"),
   gstRate: z.coerce.number().min(0, "GST rate is required"),
+}).refine((data) => {
+  // Additional validation to ensure rate is always a number and greater than 0
+  return typeof data.rate === 'number' && data.rate > 0;
+}, {
+  message: "Rate must be a number greater than 0",
+  path: ["rate"]
 });
 
 // Units

@@ -59,7 +59,8 @@ interface InvoiceFormProps {
 
 export function InvoiceForm({ company, customers, products, isLoading, onDataChange, onSuccess }: InvoiceFormProps) {
   const { toast } = useToast();
-  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
+  // Explicitly initialize with an empty array and force the type
+  const [invoiceItems, setInvoiceItems] = useState<Array<any>>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [subtotal, setSubtotal] = useState(0);
   const [gstTotals, setGstTotals] = useState({ cgst: 0, sgst: 0, igst: 0 });
@@ -226,11 +227,33 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
 
   // Add a new invoice item
   const addInvoiceItem = (itemData: any) => {
-    const newItems = [...invoiceItems, itemData];
+    console.log("Adding invoice item in invoice form:", itemData);
+    
+    // Validate item data before adding
+    if (!itemData || typeof itemData !== 'object') {
+      console.error("Invalid item data:", itemData);
+      return;
+    }
+    
+    // Ensure required numeric fields are valid numbers
+    const validatedItem = {
+      ...itemData,
+      quantity: typeof itemData.quantity === 'number' ? Math.max(0.01, itemData.quantity) : 1,
+      rate: typeof itemData.rate === 'number' ? Math.max(0.01, itemData.rate) : 1,
+      amount: typeof itemData.amount === 'number' ? Math.max(0.01, itemData.amount) : 1,
+    };
+    
+    console.log("Validated item:", validatedItem);
+    
+    const newItems = [...invoiceItems, validatedItem];
+    console.log("New invoice items array:", newItems);
+    
     setInvoiceItems(newItems);
+    
     // Save form state after adding item
     setTimeout(() => {
       saveFormState();
+      console.log("Form state saved with items:", newItems.length);
     }, 0);
   };
 
@@ -569,38 +592,51 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
                         </td>
                       </tr>
                     ) : (
-                      invoiceItems.map((item, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.description}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {item.hsnCode || "-"}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {item.quantity} {item.unit}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {formatCurrency(item.rate)}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {item.gstRate}%
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {formatCurrency(item.amount)}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeInvoiceItem(index)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2Icon className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
+                      invoiceItems.map((item, index) => {
+                        // Debug log to see the item content
+                        console.log(`Rendering item ${index}:`, item);
+                        
+                        // Ensure values are correctly parsed and formatted
+                        const quantity = parseFloat(typeof item.quantity === 'string' ? item.quantity : String(item.quantity));
+                        const rate = parseFloat(typeof item.rate === 'string' ? item.rate : String(item.rate));
+                        const amount = parseFloat(typeof item.amount === 'string' ? item.amount : String(item.amount));
+                        
+                        // Additional debugging for numeric values
+                        console.log(`Item ${index} numeric values - quantity: ${quantity}, rate: ${rate}, amount: ${amount}`);
+                        
+                        return (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {item.description}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {item.hsnCode || "-"}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {!isNaN(quantity) ? quantity : 0} {item.unit}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {!isNaN(rate) ? formatCurrency(rate) : formatCurrency(0)}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {item.gstRate}%
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                              {!isNaN(amount) ? formatCurrency(amount) : formatCurrency(0)}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeInvoiceItem(index)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2Icon className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
