@@ -378,20 +378,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
+      // Log the received invoice data for debugging
       const { invoice, items } = req.body;
-      
-      const newInvoice = await storage.createInvoice(
-        {
+      console.log("Received invoice data:", {
+        invoice: {
           ...invoice,
           userId: req.user.id
         },
-        items || []
-      );
+        itemsCount: items ? items.length : 0
+      });
       
-      return res.status(201).json(newInvoice);
-    } catch (error) {
-      console.error("Error creating invoice:", error);
-      return res.status(500).json({ error: "Server error" });
+      // Validate that we have items
+      if (!items || items.length === 0) {
+        return res.status(400).json({ error: "No invoice items provided" });
+      }
+      
+      // Create the invoice with explicit try/catch for better debugging
+      try {
+        const newInvoice = await storage.createInvoice(
+          {
+            ...invoice,
+            userId: req.user.id
+          },
+          items
+        );
+        
+        console.log("Invoice created successfully:", newInvoice.id);
+        return res.status(201).json(newInvoice);
+      } catch (invoiceError: any) {
+        // More detailed error reporting for invoice creation failures
+        console.error("Invoice creation failed:", invoiceError.message || invoiceError);
+        
+        if (invoiceError.message && invoiceError.message.includes("unit")) {
+          return res.status(500).json({ 
+            error: "Database schema error with 'unit' column. Schema needs to be updated." 
+          });
+        }
+        
+        return res.status(500).json({ 
+          error: "Invoice creation failed", 
+          message: invoiceError.message || "Unknown error",
+          stack: process.env.NODE_ENV === 'development' ? invoiceError.stack : undefined
+        });
+      }
+    } catch (error: any) {
+      console.error("Error processing invoice request:", error);
+      return res.status(500).json({ 
+        error: "Server error", 
+        message: error.message || "Unknown error",
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     }
   });
 
