@@ -221,9 +221,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       return res.status(201).json(newProduct);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating product:", error);
-      return res.status(500).json({ error: "Server error" });
+      
+      // Provide more specific error messages for known error types
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          error: "Duplicate record", 
+          details: "A product with this information already exists."
+        });
+      }
+      
+      return res.status(500).json({ 
+        error: "Server error", 
+        message: error.message || "An unknown error occurred"
+      });
     }
   });
 

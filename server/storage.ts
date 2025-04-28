@@ -648,29 +648,63 @@ export class SupabaseStorage implements IStorage {
         gst_rate: product.gstRate
       };
       
-      // Insert using Supabase
-      const { data, error } = await supabase
-        .from('products')
-        .insert(supabaseProduct)
-        .select()
-        .single();
+      // Insert using Supabase with explicit error handling
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .insert(supabaseProduct)
+          .select()
+          .single();
+          
+        if (error) {
+          console.error("Supabase product insert error:", error);
+          throw error;
+        }
         
-      if (error) {
-        console.error("Supabase product insert error:", error);
-        throw error;
+        // Transform back to camelCase
+        return {
+          id: data.id,
+          userId: data.user_id,
+          name: data.name,
+          description: data.description || null,
+          hsnCode: data.hsn_code || null,
+          unit: data.unit || null,
+          rate: data.rate,
+          gstRate: data.gst_rate
+        };
+      } catch (supabaseError: any) {
+        // If there's a primary key violation, let's try again without specifying an ID
+        if (supabaseError.code === '23505' && supabaseError.message.includes('products_pkey')) {
+          console.log("Handling primary key violation, retrying with auto-generated ID");
+          
+          // Retry the insert
+          const { data: retryData, error: retryError } = await supabase
+            .from('products')
+            .insert(supabaseProduct)
+            .select()
+            .single();
+            
+          if (retryError) {
+            console.error("Retry product insert error:", retryError);
+            throw retryError;
+          }
+          
+          // Transform back to camelCase
+          return {
+            id: retryData.id,
+            userId: retryData.user_id,
+            name: retryData.name,
+            description: retryData.description || null,
+            hsnCode: retryData.hsn_code || null,
+            unit: retryData.unit || null,
+            rate: retryData.rate,
+            gstRate: retryData.gst_rate
+          };
+        } else {
+          // For other errors, just throw
+          throw supabaseError;
+        }
       }
-      
-      // Transform back to camelCase
-      return {
-        id: data.id,
-        userId: data.user_id,
-        name: data.name,
-        description: data.description || null,
-        hsnCode: data.hsn_code || null,
-        unit: data.unit || null,
-        rate: data.rate,
-        gstRate: data.gst_rate
-      };
     } catch (error) {
       console.error("Error creating product:", error);
       throw error;
