@@ -107,8 +107,13 @@ export function CompanyForm({ company, section = 'details', onSuccess }: Company
   // Create company mutation
   const createCompanyMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertCompanySchema>) => {
-      const response = await apiRequest("POST", "/api/company", data);
-      return await response.json();
+      try {
+        const response = await apiRequest("POST", "/api/company", data);
+        return await response.json();
+      } catch (error: any) {
+        console.error("Error creating company:", error);
+        throw new Error(error.message || "Failed to create company profile");
+      }
     },
     onSuccess: () => {
       toast({
@@ -118,7 +123,8 @@ export function CompanyForm({ company, section = 'details', onSuccess }: Company
       queryClient.invalidateQueries({ queryKey: ["/api/company"] });
       if (onSuccess) onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Company creation error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create company profile. Please try again.",
@@ -130,8 +136,13 @@ export function CompanyForm({ company, section = 'details', onSuccess }: Company
   // Update company mutation
   const updateCompanyMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertCompanySchema>) => {
-      const response = await apiRequest("PUT", `/api/company/${company.id}`, data);
-      return await response.json();
+      try {
+        const response = await apiRequest("PUT", `/api/company/${company.id}`, data);
+        return await response.json();
+      } catch (error: any) {
+        console.error("Error updating company:", error);
+        throw new Error(error.message || "Failed to update company profile");
+      }
     },
     onSuccess: () => {
       toast({
@@ -141,7 +152,8 @@ export function CompanyForm({ company, section = 'details', onSuccess }: Company
       queryClient.invalidateQueries({ queryKey: ["/api/company"] });
       if (onSuccess) onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Company update error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to update company profile. Please try again.",
