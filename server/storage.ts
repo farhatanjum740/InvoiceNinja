@@ -1,14 +1,15 @@
-import { type User, type InsertUser, type Company, type InsertCompany, type Customer, type InsertCustomer, type Product, type InsertProduct, type Invoice, type InsertInvoice, type InvoiceItem, type InsertInvoiceItem } from "@shared/schema";
-import { supabase, refreshSupabaseSchemaCache } from "./db";
-import session from "express-session";
-import MemoryStore from "memorystore";
-import { Pool } from "@neondatabase/serverless";
-import { resetSequences } from "./utils/reset-sequences";
+import { createClient } from '@supabase/supabase-js';
+import session from 'express-session';
+import createMemoryStore from 'memorystore';
+import { InsertCompany, InsertCustomer, InsertInvoice, InsertInvoiceItem, InsertProduct, InsertUser, Invoice, InvoiceItem, Product, User, companies, customers, invoiceItems, invoices, products, users } from '@shared/schema';
+import { Company } from '@shared/schema';
+import { Customer } from '@shared/schema';
+import { supabase } from './db';
+import { refreshSupabaseSchemaCache } from './db';
+import { Pool } from '@neondatabase/serverless';
 
-// Initialize the memory store for sessions
-const MemStore = MemoryStore(session);
+const MemoryStore = createMemoryStore(session);
 
-// Interface for storage operations
 export interface IStorage {
   // User management
   getUser(id: number): Promise<User | undefined>;
@@ -61,18 +62,17 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
-// New implementation using Supabase only
 export class SupabaseStorage implements IStorage {
   sessionStore: session.Store;
-
+  
   constructor() {
-    // Use memory store for sessions to avoid connection issues
-    this.sessionStore = new MemStore({
-      checkPeriod: 86400000 // 24 hours
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
     });
-    console.log('Using memory store for sessions');
+    
+    console.log("Using memory store for sessions");
   }
-
+  
   async getUser(id: number): Promise<User | undefined> {
     try {
       const { data, error } = await supabase
@@ -88,21 +88,20 @@ export class SupabaseStorage implements IStorage {
       
       if (!data) return undefined;
       
-      // Transform Supabase snake_case to camelCase
       return {
         id: data.id,
         username: data.username,
-        email: data.email,
         password: data.password,
-        name: data.name,
-        createdAt: new Date(data.created_at)
+        email: data.email,
+        fullName: data.full_name,
+        createdAt: data.created_at
       };
     } catch (error) {
-      console.error("Error in getUser:", error);
+      console.error("Error fetching user:", error);
       return undefined;
     }
   }
-
+  
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
       const { data, error } = await supabase
@@ -118,21 +117,20 @@ export class SupabaseStorage implements IStorage {
       
       if (!data) return undefined;
       
-      // Transform Supabase snake_case to camelCase
       return {
         id: data.id,
         username: data.username,
-        email: data.email,
         password: data.password,
-        name: data.name,
-        createdAt: new Date(data.created_at)
+        email: data.email,
+        fullName: data.full_name,
+        createdAt: data.created_at
       };
     } catch (error) {
-      console.error("Error in getUserByUsername:", error);
+      console.error("Error fetching user by username:", error);
       return undefined;
     }
   }
-
+  
   async getUserByEmail(email: string): Promise<User | undefined> {
     try {
       const { data, error } = await supabase
@@ -148,29 +146,28 @@ export class SupabaseStorage implements IStorage {
       
       if (!data) return undefined;
       
-      // Transform Supabase snake_case to camelCase
       return {
         id: data.id,
         username: data.username,
-        email: data.email,
         password: data.password,
-        name: data.name,
-        createdAt: new Date(data.created_at)
+        email: data.email,
+        fullName: data.full_name,
+        createdAt: data.created_at
       };
     } catch (error) {
-      console.error("Error in getUserByEmail:", error);
+      console.error("Error fetching user by email:", error);
       return undefined;
     }
   }
-
+  
   async createUser(insertUser: InsertUser): Promise<User> {
     try {
-      // Convert from camelCase to snake_case for Supabase
+      // Convert camelCase to snake_case for Supabase
       const supabaseUser = {
         username: insertUser.username,
-        email: insertUser.email,
         password: insertUser.password,
-        name: insertUser.name
+        email: insertUser.email,
+        full_name: insertUser.fullName
       };
       
       const { data, error } = await supabase
@@ -180,25 +177,28 @@ export class SupabaseStorage implements IStorage {
         .single();
         
       if (error) {
-        console.error("Supabase user insert error:", error);
-        throw error;
+        console.error("Supabase user creation error:", error);
+        throw new Error(`Failed to create user: ${error.message}`);
       }
       
-      // Transform back to camelCase for our app
+      if (!data) {
+        throw new Error("Failed to create user: No data returned");
+      }
+      
       return {
         id: data.id,
         username: data.username,
-        email: data.email,
         password: data.password,
-        name: data.name,
-        createdAt: new Date(data.created_at)
+        email: data.email,
+        fullName: data.full_name,
+        createdAt: data.created_at
       };
     } catch (error) {
-      console.error("Error in createUser:", error);
+      console.error("Error creating user:", error);
       throw error;
     }
   }
-
+  
   async getCompanyByUserId(userId: number): Promise<Company | undefined> {
     try {
       const { data, error } = await supabase
@@ -219,156 +219,113 @@ export class SupabaseStorage implements IStorage {
         id: data.id,
         userId: data.user_id,
         name: data.name,
+        email: data.email,
+        phone: data.phone,
         address: data.address,
         city: data.city,
         state: data.state,
-        pincode: data.pincode,
+        postalCode: data.postal_code,
+        country: data.country,
+        website: data.website,
         gstin: data.gstin,
-        email: data.email,
-        phone: data.phone,
+        panNumber: data.pan_number,
+        logoUrl: data.logo_url,
         bankName: data.bank_name,
-        accountNumber: data.account_number,
-        ifscCode: data.ifsc_code,
-        logo: data.logo
+        bankAccountNumber: data.bank_account_number,
+        bankIfsc: data.bank_ifsc
       };
     } catch (error) {
-      console.error("Error in getCompanyByUserId:", error);
+      console.error("Error fetching company by user ID:", error);
       return undefined;
     }
   }
-
+  
   async createCompany(company: InsertCompany): Promise<Company> {
     try {
-      // First get the maximum company ID to ensure we never reuse IDs
-      const { data: maxIdData, error: maxIdError } = await supabase
-        .from('companies')
-        .select('id')
-        .order('id', { ascending: false })
-        .limit(1);
-      
-      if (maxIdError) {
-        console.error("Error fetching max company ID:", maxIdError);
-        // Continue anyway, we'll handle potential conflicts below
-      }
-      
-      // Use a high starting ID if there are no companies yet, or increment the highest existing ID
-      const nextId = maxIdData && maxIdData.length > 0 ? maxIdData[0].id + 1 : 1000;
-      console.log(`Using next company ID: ${nextId}`);
-      
-      // Convert from camelCase to snake_case for Supabase
-      // Only include fields that exist in the database schema
+      // Convert camelCase to snake_case for Supabase
       const supabaseCompany = {
-        id: nextId, // Explicitly set ID to avoid conflicts
         user_id: company.userId,
         name: company.name,
+        email: company.email,
+        phone: company.phone,
         address: company.address,
         city: company.city,
         state: company.state,
-        pincode: company.pincode,
-        gstin: company.gstin || null,
-        email: company.email || null,
-        phone: company.phone || null,
-        bank_name: company.bankName || null,
-        account_number: company.accountNumber || null, 
-        ifsc_code: company.ifscCode || null,
-        logo: company.logo || null
+        postal_code: company.postalCode,
+        country: company.country,
+        website: company.website,
+        gstin: company.gstin,
+        pan_number: company.panNumber,
+        logo_url: company.logoUrl,
+        bank_name: company.bankName,
+        bank_account_number: company.bankAccountNumber,
+        bank_ifsc: company.bankIfsc
       };
       
-      // Insert with retry logic in case of conflicts
-      let retryCount = 0;
-      const maxRetries = 3;
-      let lastError = null;
-      
-      while (retryCount <= maxRetries) {
-        try {
-          // Increment ID if we're retrying
-          if (retryCount > 0) {
-            supabaseCompany.id = nextId + retryCount;
-            console.log(`Retrying with company ID: ${supabaseCompany.id}`);
-          }
-          
-          const { data, error } = await supabase
-            .from('companies')
-            .insert(supabaseCompany)
-            .select()
-            .single();
-            
-          if (error) {
-            if (error.code === '23505' && error.message.includes('companies_pkey')) {
-              // Primary key violation, we'll retry with a different ID
-              console.log(`ID ${supabaseCompany.id} already exists, retrying...`);
-              lastError = error;
-              retryCount++;
-              continue;
-            } else {
-              // Different error
-              console.error("Supabase company insert error:", error);
-              throw error;
-            }
-          }
-          
-          // Transform back to camelCase
-          return {
-            id: data.id,
-            userId: data.user_id,
-            name: data.name,
-            address: data.address,
-            city: data.city,
-            state: data.state,
-            pincode: data.pincode,
-            gstin: data.gstin,
-            email: data.email,
-            phone: data.phone,
-            bankName: data.bank_name,
-            accountNumber: data.account_number,
-            ifscCode: data.ifsc_code,
-            logo: data.logo
-          };
-        } catch (error: any) {
-          // Only retry for primary key violations
-          if (error.code === '23505' && error.message.includes('companies_pkey') && retryCount < maxRetries) {
-            lastError = error;
-            retryCount++;
-            continue;
-          }
-          throw error;
-        }
+      const { data, error } = await supabase
+        .from('companies')
+        .insert(supabaseCompany)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase company creation error:", error);
+        throw new Error(`Failed to create company: ${error.message}`);
       }
       
-      // If we're here, we've exceeded our retry limit
-      if (lastError) {
-        throw lastError;
+      if (!data) {
+        throw new Error("Failed to create company: No data returned");
       }
       
-      // This should never happen
-      throw new Error("Failed to insert company after multiple retries");
-      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        postalCode: data.postal_code,
+        country: data.country,
+        website: data.website,
+        gstin: data.gstin,
+        panNumber: data.pan_number,
+        logoUrl: data.logo_url,
+        bankName: data.bank_name,
+        bankAccountNumber: data.bank_account_number,
+        bankIfsc: data.bank_ifsc
+      };
     } catch (error) {
-      console.error("Error in createCompany:", error);
+      console.error("Error creating company:", error);
       throw error;
     }
   }
-
+  
   async updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company | undefined> {
     try {
       // Convert partial company from camelCase to snake_case
-      // Only include fields that exist in the database schema
       const supabaseCompany: Record<string, any> = {};
       
       if ('userId' in company) supabaseCompany.user_id = company.userId;
       if ('name' in company) supabaseCompany.name = company.name;
+      if ('email' in company) supabaseCompany.email = company.email;
+      if ('phone' in company) supabaseCompany.phone = company.phone;
       if ('address' in company) supabaseCompany.address = company.address;
       if ('city' in company) supabaseCompany.city = company.city;
       if ('state' in company) supabaseCompany.state = company.state;
-      if ('pincode' in company) supabaseCompany.pincode = company.pincode;
+      if ('postalCode' in company) supabaseCompany.postal_code = company.postalCode;
+      if ('country' in company) supabaseCompany.country = company.country;
+      if ('website' in company) supabaseCompany.website = company.website;
       if ('gstin' in company) supabaseCompany.gstin = company.gstin;
-      if ('email' in company) supabaseCompany.email = company.email;
-      if ('phone' in company) supabaseCompany.phone = company.phone;
+      if ('panNumber' in company) supabaseCompany.pan_number = company.panNumber;
+      if ('logoUrl' in company) supabaseCompany.logo_url = company.logoUrl;
       if ('bankName' in company) supabaseCompany.bank_name = company.bankName;
-      if ('accountNumber' in company) supabaseCompany.account_number = company.accountNumber;
-      if ('ifscCode' in company) supabaseCompany.ifsc_code = company.ifscCode;
-      if ('logo' in company) supabaseCompany.logo = company.logo;
+      if ('bankAccountNumber' in company) supabaseCompany.bank_account_number = company.bankAccountNumber;
+      if ('bankIfsc' in company) supabaseCompany.bank_ifsc = company.bankIfsc;
       
+      // Update using Supabase
       const { data, error } = await supabase
         .from('companies')
         .update(supabaseCompany)
@@ -386,24 +343,27 @@ export class SupabaseStorage implements IStorage {
         id: data.id,
         userId: data.user_id,
         name: data.name,
+        email: data.email,
+        phone: data.phone,
         address: data.address,
         city: data.city,
         state: data.state,
-        pincode: data.pincode,
+        postalCode: data.postal_code,
+        country: data.country,
+        website: data.website,
         gstin: data.gstin,
-        email: data.email,
-        phone: data.phone,
+        panNumber: data.pan_number,
+        logoUrl: data.logo_url,
         bankName: data.bank_name,
-        accountNumber: data.account_number,
-        ifscCode: data.ifsc_code,
-        logo: data.logo
+        bankAccountNumber: data.bank_account_number,
+        bankIfsc: data.bank_ifsc
       };
     } catch (error) {
-      console.error("Error in updateCompany:", error);
+      console.error("Error updating company:", error);
       return undefined;
     }
   }
-
+  
   async getCustomersByUserId(userId: number): Promise<Customer[]> {
     try {
       const { data, error } = await supabase
@@ -412,34 +372,30 @@ export class SupabaseStorage implements IStorage {
         .eq('user_id', userId);
         
       if (error) {
-        console.error("Supabase customer fetch error:", error);
+        console.error("Supabase customers fetch error:", error);
         return [];
       }
       
       // Transform Supabase snake_case to camelCase
-      return data.map((c: any) => ({
+      return data.map(c => ({
         id: c.id,
         userId: c.user_id,
         name: c.name,
         email: c.email,
         phone: c.phone,
-        gstin: c.gstin,
-        billingAddress: c.billing_address,
-        billingCity: c.billing_city,
-        billingState: c.billing_state,
-        billingPincode: c.billing_pincode,
-        shippingAddress: c.shipping_address,
-        shippingCity: c.shipping_city,
-        shippingState: c.shipping_state,
-        shippingPincode: c.shipping_pincode,
-        sameAsShipping: c.same_as_shipping
+        address: c.address,
+        city: c.city,
+        state: c.state,
+        postalCode: c.postal_code,
+        country: c.country,
+        gstin: c.gstin
       }));
     } catch (error) {
       console.error("Error fetching customers:", error);
       return [];
     }
   }
-
+  
   async getCustomer(id: number): Promise<Customer | undefined> {
     try {
       const { data, error } = await supabase
@@ -462,44 +418,35 @@ export class SupabaseStorage implements IStorage {
         name: data.name,
         email: data.email,
         phone: data.phone,
-        gstin: data.gstin,
-        billingAddress: data.billing_address,
-        billingCity: data.billing_city,
-        billingState: data.billing_state,
-        billingPincode: data.billing_pincode,
-        shippingAddress: data.shipping_address,
-        shippingCity: data.shipping_city,
-        shippingState: data.shipping_state,
-        shippingPincode: data.shipping_pincode,
-        sameAsShipping: data.same_as_shipping
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        postalCode: data.postal_code,
+        country: data.country,
+        gstin: data.gstin
       };
     } catch (error) {
       console.error("Error fetching customer:", error);
       return undefined;
     }
   }
-
+  
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
     try {
-      // Transform to snake_case for Supabase
+      // Convert camelCase to snake_case for Supabase
       const supabaseCustomer = {
         user_id: customer.userId,
         name: customer.name,
         email: customer.email,
         phone: customer.phone,
-        gstin: customer.gstin,
-        billing_address: customer.billingAddress,
-        billing_city: customer.billingCity,
-        billing_state: customer.billingState,
-        billing_pincode: customer.billingPincode,
-        shipping_address: customer.shippingAddress,
-        shipping_city: customer.shippingCity,
-        shipping_state: customer.shippingState,
-        shipping_pincode: customer.shippingPincode,
-        same_as_shipping: customer.sameAsShipping
+        address: customer.address,
+        city: customer.city,
+        state: customer.state,
+        postal_code: customer.postalCode,
+        country: customer.country,
+        gstin: customer.gstin
       };
       
-      // Insert using Supabase
       const { data, error } = await supabase
         .from('customers')
         .insert(supabaseCustomer)
@@ -507,34 +454,34 @@ export class SupabaseStorage implements IStorage {
         .single();
         
       if (error) {
-        console.error("Supabase customer insert error:", error);
-        throw error;
+        console.error("Supabase customer creation error:", error);
+        throw new Error(`Failed to create customer: ${error.message}`);
       }
       
-      // Transform back to camelCase
+      if (!data) {
+        throw new Error("Failed to create customer: No data returned");
+      }
+      
+      // Transform Supabase snake_case to camelCase
       return {
         id: data.id,
         userId: data.user_id,
         name: data.name,
         email: data.email,
         phone: data.phone,
-        gstin: data.gstin,
-        billingAddress: data.billing_address,
-        billingCity: data.billing_city,
-        billingState: data.billing_state,
-        billingPincode: data.billing_pincode,
-        shippingAddress: data.shipping_address,
-        shippingCity: data.shipping_city,
-        shippingState: data.shipping_state,
-        shippingPincode: data.shipping_pincode,
-        sameAsShipping: data.same_as_shipping
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        postalCode: data.postal_code,
+        country: data.country,
+        gstin: data.gstin
       };
     } catch (error) {
       console.error("Error creating customer:", error);
       throw error;
     }
   }
-
+  
   async updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined> {
     try {
       // Convert partial customer from camelCase to snake_case
@@ -544,16 +491,12 @@ export class SupabaseStorage implements IStorage {
       if ('name' in customer) supabaseCustomer.name = customer.name;
       if ('email' in customer) supabaseCustomer.email = customer.email;
       if ('phone' in customer) supabaseCustomer.phone = customer.phone;
+      if ('address' in customer) supabaseCustomer.address = customer.address;
+      if ('city' in customer) supabaseCustomer.city = customer.city;
+      if ('state' in customer) supabaseCustomer.state = customer.state;
+      if ('postalCode' in customer) supabaseCustomer.postal_code = customer.postalCode;
+      if ('country' in customer) supabaseCustomer.country = customer.country;
       if ('gstin' in customer) supabaseCustomer.gstin = customer.gstin;
-      if ('billingAddress' in customer) supabaseCustomer.billing_address = customer.billingAddress;
-      if ('billingCity' in customer) supabaseCustomer.billing_city = customer.billingCity;
-      if ('billingState' in customer) supabaseCustomer.billing_state = customer.billingState;
-      if ('billingPincode' in customer) supabaseCustomer.billing_pincode = customer.billingPincode;
-      if ('shippingAddress' in customer) supabaseCustomer.shipping_address = customer.shippingAddress;
-      if ('shippingCity' in customer) supabaseCustomer.shipping_city = customer.shippingCity;
-      if ('shippingState' in customer) supabaseCustomer.shipping_state = customer.shippingState;
-      if ('shippingPincode' in customer) supabaseCustomer.shipping_pincode = customer.shippingPincode;
-      if ('sameAsShipping' in customer) supabaseCustomer.same_as_shipping = customer.sameAsShipping;
       
       // Update using Supabase
       const { data, error } = await supabase
@@ -575,23 +518,19 @@ export class SupabaseStorage implements IStorage {
         name: data.name,
         email: data.email,
         phone: data.phone,
-        gstin: data.gstin,
-        billingAddress: data.billing_address,
-        billingCity: data.billing_city,
-        billingState: data.billing_state,
-        billingPincode: data.billing_pincode,
-        shippingAddress: data.shipping_address,
-        shippingCity: data.shipping_city,
-        shippingState: data.shipping_state,
-        shippingPincode: data.shipping_pincode,
-        sameAsShipping: data.same_as_shipping
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        postalCode: data.postal_code,
+        country: data.country,
+        gstin: data.gstin
       };
     } catch (error) {
       console.error("Error updating customer:", error);
       return undefined;
     }
   }
-
+  
   async deleteCustomer(id: number): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -610,7 +549,7 @@ export class SupabaseStorage implements IStorage {
       return false;
     }
   }
-
+  
   async getProductsByUserId(userId: number): Promise<Product[]> {
     try {
       const { data, error } = await supabase
@@ -619,27 +558,28 @@ export class SupabaseStorage implements IStorage {
         .eq('user_id', userId);
         
       if (error) {
-        console.error("Supabase product fetch error:", error);
+        console.error("Supabase products fetch error:", error);
         return [];
       }
       
       // Transform Supabase snake_case to camelCase
-      return data.map((p: any) => ({
+      return data.map(p => ({
         id: p.id,
         userId: p.user_id,
         name: p.name,
-        description: p.description || null,
-        hsnCode: p.hsn_code || null,
-        unit: p.unit || null,
-        rate: p.rate,
-        gstRate: p.gst_rate
+        description: p.description,
+        hsnCode: p.hsn_code,
+        unit: p.unit,
+        price: p.price,
+        gstRate: p.gst_rate,
+        imageUrl: p.image_url
       }));
     } catch (error) {
       console.error("Error fetching products:", error);
       return [];
     }
   }
-
+  
   async getProduct(id: number): Promise<Product | undefined> {
     try {
       const { data, error } = await supabase
@@ -660,182 +600,68 @@ export class SupabaseStorage implements IStorage {
         id: data.id,
         userId: data.user_id,
         name: data.name,
-        description: data.description || null,
-        hsnCode: data.hsn_code || null,
-        unit: data.unit || null,
-        rate: data.rate,
-        gstRate: data.gst_rate
+        description: data.description,
+        hsnCode: data.hsn_code,
+        unit: data.unit,
+        price: data.price,
+        gstRate: data.gst_rate,
+        imageUrl: data.image_url
       };
     } catch (error) {
       console.error("Error fetching product:", error);
       return undefined;
     }
   }
-
+  
   async createProduct(product: InsertProduct): Promise<Product> {
     try {
-      // First check if a product with this name already exists for this user
-      const { data: existingProduct, error: existingError } = await supabase
-        .from('products')
-        .select('id')
-        .eq('user_id', product.userId)
-        .eq('name', product.name)
-        .limit(1);
-      
-      if (existingError) {
-        console.error("Error checking existing product:", existingError);
-        // Continue anyway as it's not critical
-      } else if (existingProduct && existingProduct.length > 0) {
-        // A product with this name already exists for this user
-        const error = new Error(`A product with name "${product.name}" already exists`);
-        Object.assign(error, { code: 'DUPLICATE_NAME' });
-        throw error;
-      }
-      
-      // Get the maximum product ID to ensure we never reuse IDs
-      const { data: maxIdData, error: maxIdError } = await supabase
-        .from('products')
-        .select('id')
-        .order('id', { ascending: false })
-        .limit(1);
-      
-      if (maxIdError) {
-        console.error("Error fetching max product ID:", maxIdError);
-        // Continue anyway, we'll handle potential conflicts below
-      }
-      
-      // Use a high starting ID if there are no products yet, or increment the highest existing ID
-      const nextId = maxIdData && maxIdData.length > 0 ? maxIdData[0].id + 1 : 1000;
-      console.log(`Using next product ID: ${nextId}`);
-      
-      // Transform to snake_case for Supabase
+      // Convert camelCase to snake_case for Supabase
       const supabaseProduct = {
-        id: nextId, // Explicitly set the ID to avoid conflicts
         user_id: product.userId,
         name: product.name,
         description: product.description,
         hsn_code: product.hsnCode,
         unit: product.unit,
-        rate: product.rate,
-        gst_rate: product.gstRate
+        price: product.price,
+        gst_rate: product.gstRate,
+        image_url: product.imageUrl
       };
       
-      // Insert with retry logic in case of conflicts
-      let retryCount = 0;
-      const maxRetries = 3;
-      let lastError = null;
-      
-      while (retryCount < maxRetries) {
-        try {
-          // If this isn't the first attempt, increment the ID
-          if (retryCount > 0) {
-            supabaseProduct.id += 1;
-            console.log(`Retry attempt ${retryCount} with ID: ${supabaseProduct.id}`);
-          }
-          
-          const { data, error } = await supabase
-            .from('products')
-            .insert(supabaseProduct)
-            .select()
-            .single();
-            
-          if (error) {
-            if (error.code === '23505') {
-              if (error.message.includes('products_pkey')) {
-                // Primary key violation, we'll retry with a different ID
-                console.log(`ID ${supabaseProduct.id} already exists, retrying...`);
-                lastError = error;
-                retryCount++;
-                continue;
-              } else if (error.message.includes('products_user_id_name_key')) {
-                // Duplicate name constraint violation
-                const duplicateError = new Error(`A product with name "${product.name}" already exists`);
-                Object.assign(duplicateError, { code: 'DUPLICATE_NAME' });
-                throw duplicateError;
-              } else {
-                // Other unique constraint violation
-                console.error("Supabase unique constraint error:", error);
-                throw error;
-              }
-            } else {
-              // Different error
-              console.error("Supabase product insert error:", error);
-              throw error;
-            }
-          }
-          
-          // Success! Transform back to camelCase and return
-          return {
-            id: data.id,
-            userId: data.user_id,
-            name: data.name,
-            description: data.description || null,
-            hsnCode: data.hsn_code || null,
-            unit: data.unit || null,
-            rate: data.rate,
-            gstRate: data.gst_rate
-          };
-        } catch (error: any) {
-          // Check if it's our custom error
-          if (error.code === 'DUPLICATE_NAME') {
-            throw error;
-          }
-          
-          // Only retry for primary key violations
-          if (error.code === '23505' && error.message.includes('products_pkey') && retryCount < maxRetries) {
-            lastError = error;
-            retryCount++;
-          } else {
-            throw error;
-          }
-        }
+      const { data, error } = await supabase
+        .from('products')
+        .insert(supabaseProduct)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase product creation error:", error);
+        throw new Error(`Failed to create product: ${error.message}`);
       }
       
-      // If we get here, we've exhausted our retries
-      console.error(`Failed to create product after ${maxRetries} attempts`);
-      throw lastError || new Error('Failed to create product after multiple attempts');
+      if (!data) {
+        throw new Error("Failed to create product: No data returned");
+      }
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        description: data.description,
+        hsnCode: data.hsn_code,
+        unit: data.unit,
+        price: data.price,
+        gstRate: data.gst_rate,
+        imageUrl: data.image_url
+      };
     } catch (error) {
       console.error("Error creating product:", error);
       throw error;
     }
   }
-
+  
   async updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined> {
     try {
-      // Check if renaming to a name that already exists for this user
-      if ('name' in product && product.name) {
-        // Get the current product to get the userId
-        const { data: currentProduct, error: currentError } = await supabase
-          .from('products')
-          .select('user_id')
-          .eq('id', id)
-          .single();
-          
-        if (currentError) {
-          console.error("Error fetching current product:", currentError);
-          return undefined;
-        }
-        
-        // Check if another product with this name exists for this user (excluding the current product)
-        const { data: existingProduct, error: existingError } = await supabase
-          .from('products')
-          .select('id')
-          .eq('user_id', currentProduct.user_id)
-          .eq('name', product.name)
-          .neq('id', id) // exclude the current product
-          .limit(1);
-        
-        if (existingError) {
-          console.error("Error checking existing product:", existingError);
-          // Continue anyway as it's not critical
-        } else if (existingProduct && existingProduct.length > 0) {
-          // A product with this name already exists for this user
-          const error = new Error(`A product with name "${product.name}" already exists`);
-          Object.assign(error, { code: 'DUPLICATE_NAME' });
-          throw error;
-        }
-      }
-      
       // Convert partial product from camelCase to snake_case
       const supabaseProduct: Record<string, any> = {};
       
@@ -844,64 +670,41 @@ export class SupabaseStorage implements IStorage {
       if ('description' in product) supabaseProduct.description = product.description;
       if ('hsnCode' in product) supabaseProduct.hsn_code = product.hsnCode;
       if ('unit' in product) supabaseProduct.unit = product.unit;
-      if ('rate' in product) supabaseProduct.rate = product.rate;
+      if ('price' in product) supabaseProduct.price = product.price;
       if ('gstRate' in product) supabaseProduct.gst_rate = product.gstRate;
+      if ('imageUrl' in product) supabaseProduct.image_url = product.imageUrl;
       
       // Update using Supabase
-      try {
-        const { data, error } = await supabase
-          .from('products')
-          .update(supabaseProduct)
-          .eq('id', id)
-          .select()
-          .single();
-          
-        if (error) {
-          if (error.code === '23505' && error.message.includes('products_user_id_name_key')) {
-            // Duplicate name constraint violation
-            const duplicateError = new Error(`A product with name "${product.name}" already exists`);
-            Object.assign(duplicateError, { code: 'DUPLICATE_NAME' });
-            throw duplicateError;
-          } else {
-            console.error("Supabase product update error:", error);
-            return undefined;
-          }
-        }
+      const { data, error } = await supabase
+        .from('products')
+        .update(supabaseProduct)
+        .eq('id', id)
+        .select()
+        .single();
         
-        // Transform back to camelCase
-        return {
-          id: data.id,
-          userId: data.user_id,
-          name: data.name,
-          description: data.description || null,
-          hsnCode: data.hsn_code || null,
-          unit: data.unit || null,
-          rate: data.rate,
-          gstRate: data.gst_rate
-        };
-      } catch (error: any) {
-        // Check if it's our custom error or a database constraint error
-        if (error.code === 'DUPLICATE_NAME' || 
-           (error.code === '23505' && error.message.includes('products_user_id_name_key'))) {
-          const duplicateError = new Error(`A product with name "${product.name}" already exists`);
-          Object.assign(duplicateError, { code: 'DUPLICATE_NAME' });
-          throw duplicateError;
-        } else {
-          throw error;
-        }
+      if (error) {
+        console.error("Supabase product update error:", error);
+        return undefined;
       }
-    } catch (error: any) {
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        description: data.description,
+        hsnCode: data.hsn_code,
+        unit: data.unit,
+        price: data.price,
+        gstRate: data.gst_rate,
+        imageUrl: data.image_url
+      };
+    } catch (error) {
       console.error("Error updating product:", error);
-      
-      // Re-throw custom errors to be handled by the API route
-      if (error.code === 'DUPLICATE_NAME') {
-        throw error;
-      }
-      
       return undefined;
     }
   }
-
+  
   async deleteProduct(id: number): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -920,14 +723,13 @@ export class SupabaseStorage implements IStorage {
       return false;
     }
   }
-
+  
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
     try {
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
-        .eq('user_id', userId)
-        .order('id', { ascending: false });
+        .eq('user_id', userId);
         
       if (error) {
         console.error("Supabase invoices fetch error:", error);
@@ -935,7 +737,7 @@ export class SupabaseStorage implements IStorage {
       }
       
       // Transform Supabase snake_case to camelCase
-      return data.map((i: any) => ({
+      return data.map(i => ({
         id: i.id,
         userId: i.user_id,
         customerId: i.customer_id,
@@ -958,7 +760,7 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
   }
-
+  
   async getInvoice(id: number): Promise<Invoice | undefined> {
     try {
       const { data, error } = await supabase
@@ -998,7 +800,42 @@ export class SupabaseStorage implements IStorage {
       return undefined;
     }
   }
-
+  
+  // Helper function to create a direct database connection for bypassing schema cache issues
+  private async getDirectDbConnection(): Promise<Pool> {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('No DATABASE_URL available for direct SQL connection');
+    }
+    return new Pool({ connectionString: process.env.DATABASE_URL });
+  }
+  
+  // Helper function to force a schema refresh for Supabase
+  private async forceSchemaRefresh(table: string, fields: string[]): Promise<boolean> {
+    console.log(`Forcing schema refresh for ${table} table with fields: ${fields.join(', ')}`);
+    
+    try {
+      // First try Supabase's native select to refresh the schema cache
+      const selectQuery = fields.join(', ');
+      await supabase.from(table).select(selectQuery).limit(1);
+      
+      // Also try to notify PostgREST to reload schema
+      const pool = await this.getDirectDbConnection();
+      try {
+        await pool.query("SELECT pg_notify('pgrst', 'reload schema');");
+        console.log("Sent schema reload notification to PostgREST");
+      } catch (notifyError) {
+        console.warn("Could not notify PostgREST to reload schema:", notifyError);
+      } finally {
+        await pool.end();
+      }
+      
+      return true;
+    } catch (error) {
+      console.error(`Failed to refresh schema for ${table}:`, error);
+      return false;
+    }
+  }
+  
   async getInvoiceWithItems(id: number): Promise<{ invoice: Invoice; items: InvoiceItem[] }> {
     try {
       // Get the invoice
@@ -1082,304 +919,205 @@ export class SupabaseStorage implements IStorage {
     
     console.log("Starting invoice creation process with", items.length, "items");
 
-    // ===== TRY SUPABASE FIRST, FALL BACK TO DIRECT SQL IF NEEDED =====
-    try {
-      console.log("Attempting to create invoice via Supabase API");
-      
-      // Try to reset sequences first to avoid conflicts
+    // Forcibly refresh the schema cache for both tables
+    await this.forceSchemaRefresh('invoices', [
+      'id', 'user_id', 'customer_id', 'invoice_number', 'invoice_date', 'due_date', 
+      'notes', 'status', 'subtotal', 'cgst', 'sgst', 'igst', 'total', 
+      'terms_and_conditions', 'template_id', 'color_theme'
+    ]);
+    
+    await this.forceSchemaRefresh('invoice_items', [
+      'id', 'invoice_id', 'product_id', 'description', 'unit', 
+      'quantity', 'rate', 'amount', 'gst_rate', 'hsn_code'
+    ]);
+    
+    // Use direct database operations for best reliability
+    if (process.env.DATABASE_URL) {
       try {
-        await supabase.rpc('reset_invoices_sequence');
-        await supabase.rpc('reset_invoice_items_sequence');
-      } catch (seqError) {
-        console.error("Failed to reset sequences, continuing anyway:", seqError);
-      }
-      
-      // Prepare invoice data in snake_case for Supabase
-      const supabaseInvoice = {
-        user_id: invoice.userId,
-        customer_id: invoice.customerId,
-        invoice_number: invoice.invoiceNumber || `INV-${Date.now()}`,
-        invoice_date: invoice.invoiceDate,
-        due_date: invoice.dueDate || null,
-        notes: invoice.notes || '',
-        status: invoice.status || 'draft',
-        subtotal: invoice.subtotal || '0.00',
-        cgst: invoice.cgst || '0.00',
-        sgst: invoice.sgst || '0.00',
-        igst: invoice.igst || '0.00',
-        total: invoice.total || '0.00',
-        terms_and_conditions: invoice.termsAndConditions || '',
-        template_id: invoice.templateId || 'standard',
-        color_theme: invoice.colorTheme || 'blue'
-      };
-      
-      // Try to insert the invoice via Supabase
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert(supabaseInvoice)
-        .select()
-        .single();
-      
-      if (invoiceError) {
-        // If Supabase failed, we need to use direct SQL
-        console.error("Supabase invoice insert failed:", invoiceError.message);
-        throw new Error("Supabase insert failed, falling back to direct SQL");
-      }
-      
-      if (!invoiceData || !invoiceData.id) {
-        throw new Error("Supabase invoice creation returned no data or ID");
-      }
-      
-      console.log("Created invoice via Supabase with ID:", invoiceData.id);
-      
-      // Prepare invoice items data for Supabase
-      const supabaseItems = items.map((item, index) => {
-        const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity || 1);
-        const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0);
-        const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
-        const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate || 0);
+        console.log("Using direct SQL transaction for invoice creation");
+        const pool = await this.getDirectDbConnection();
         
-        return {
-          invoice_id: invoiceData.id,
-          product_id: item.productId || null,
-          description: item.description || `Item ${index + 1}`,
-          unit: item.unit || 'Piece',
-          quantity: isNaN(quantity) ? 1 : quantity,
-          rate: isNaN(rate) ? 0 : rate,
-          amount: isNaN(amount) ? quantity * rate : amount,
-          gst_rate: isNaN(gstRate) ? 0 : gstRate,
-          hsn_code: item.hsnCode || null
-        };
-      });
-      
-      console.log("Inserting", supabaseItems.length, "invoice items via Supabase API");
-      
-      // Try to insert items via Supabase
-      const { error: itemsError } = await supabase
-        .from('invoice_items')
-        .insert(supabaseItems);
-      
-      if (itemsError) {
-        // If items insert failed, roll back invoice
-        console.error("Supabase items insert failed:", itemsError.message);
-        await supabase.from('invoices').delete().eq('id', invoiceData.id);
-        throw new Error("Supabase items insert failed, falling back to direct SQL");
-      }
-      
-      console.log(`Successfully created invoice #${invoiceData.id} with ${supabaseItems.length} items via Supabase`);
-      
-      // Return the invoice in camelCase
-      return {
-        id: invoiceData.id,
-        userId: invoiceData.user_id,
-        customerId: invoiceData.customer_id,
-        invoiceNumber: invoiceData.invoice_number,
-        invoiceDate: invoiceData.invoice_date,
-        dueDate: invoiceData.due_date,
-        notes: invoiceData.notes || null,
-        status: invoiceData.status,
-        subtotal: invoiceData.subtotal,
-        cgst: invoiceData.cgst || '0.00',
-        sgst: invoiceData.sgst || '0.00',
-        igst: invoiceData.igst || '0.00',
-        total: invoiceData.total,
-        termsAndConditions: invoiceData.terms_and_conditions || null,
-        templateId: invoiceData.template_id || 'standard',
-        colorTheme: invoiceData.color_theme || 'blue'
-      };
-    } catch (supabaseError) {
-      // If Supabase failed for any reason, fall back to direct SQL
-      console.log("Falling back to direct SQL transaction due to error:", 
-                  supabaseError instanceof Error ? supabaseError.message : String(supabaseError));
-      
-      // Only proceed with direct SQL if we have DATABASE_URL
-      if (!process.env.DATABASE_URL) {
-        throw new Error("Failed to create invoice: Supabase API failed and no direct database connection available");
-      }
-      
-      // Initialize a connection pool
-      console.log("Using direct SQL transaction for invoice creation");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      
-      try {
-        // Start transaction
-        await pool.query('BEGIN');
-        
-        // Prepare invoice data for SQL
-        const sqlInvoice = {
-          user_id: invoice.userId,
-          customer_id: invoice.customerId,
-          invoice_number: invoice.invoiceNumber || `INV-${Date.now()}`,
-          invoice_date: invoice.invoiceDate,
-          due_date: invoice.dueDate || null,
-          notes: invoice.notes || '',
-          status: invoice.status || 'draft',
-          subtotal: invoice.subtotal || '0.00',
-          cgst: invoice.cgst || '0.00',
-          sgst: invoice.sgst || '0.00',
-          igst: invoice.igst || '0.00',
-          total: invoice.total || '0.00',
-          terms_and_conditions: invoice.termsAndConditions || '',
-          template_id: invoice.templateId || 'standard',
-          color_theme: invoice.colorTheme || 'blue'
-        };
-        
-        console.log("Creating invoice with SQL transaction...");
-        
-        // Insert the invoice and get the ID
-        const invoiceResult = await pool.query(`
-          INSERT INTO invoices
-            (user_id, customer_id, invoice_number, invoice_date, due_date, notes, status, 
-             subtotal, cgst, sgst, igst, total, terms_and_conditions, template_id, color_theme)
-          VALUES 
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-          RETURNING id
-        `, [
-          sqlInvoice.user_id,
-          sqlInvoice.customer_id,
-          sqlInvoice.invoice_number,
-          sqlInvoice.invoice_date,
-          sqlInvoice.due_date,
-          sqlInvoice.notes,
-          sqlInvoice.status,
-          sqlInvoice.subtotal,
-          sqlInvoice.cgst,
-          sqlInvoice.sgst,
-          sqlInvoice.igst,
-          sqlInvoice.total,
-          sqlInvoice.terms_and_conditions,
-          sqlInvoice.template_id,
-          sqlInvoice.color_theme
-        ]);
-        
-        if (!invoiceResult.rows || invoiceResult.rows.length === 0) {
-          throw new Error("Failed to create invoice - no ID returned");
-        }
-        
-        const invoiceId = invoiceResult.rows[0].id;
-        console.log("Created invoice with ID:", invoiceId);
-        
-        // Process items and prepare for insertion
-        const sqlItems = items.map((item, index) => {
-          // Ensure numeric values are valid numbers
-          const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity || 1);
-          const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0);
-          const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
-          const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate || 0);
+        try {
+          // Start transaction
+          await pool.query('BEGIN');
           
-          return {
-            invoice_id: invoiceId,
-            product_id: item.productId || null,
-            description: item.description || `Item ${index + 1}`,
-            unit: item.unit || 'Piece',
-            quantity: isNaN(quantity) ? 1 : quantity,
-            rate: isNaN(rate) ? 0 : rate,
-            amount: isNaN(amount) ? quantity * rate : amount,
-            gst_rate: isNaN(gstRate) ? 0 : gstRate,
-            hsn_code: item.hsnCode || null
+          // Prepare invoice data for SQL
+          const sqlInvoice = {
+            user_id: invoice.userId,
+            customer_id: invoice.customerId,
+            invoice_number: invoice.invoiceNumber || `INV-${Date.now()}`,
+            invoice_date: invoice.invoiceDate,
+            due_date: invoice.dueDate || null,
+            notes: invoice.notes || '',
+            status: invoice.status || 'draft',
+            subtotal: invoice.subtotal || '0.00',
+            cgst: invoice.cgst || '0.00',
+            sgst: invoice.sgst || '0.00',
+            igst: invoice.igst || '0.00',
+            total: invoice.total || '0.00',
+            terms_and_conditions: invoice.termsAndConditions || '',
+            template_id: invoice.templateId || 'standard',
+            color_theme: invoice.colorTheme || 'blue'
           };
-        });
-        
-        // Insert each item in the same transaction
-        console.log("Inserting", sqlItems.length, "invoice items...");
-        
-        let insertedItems = [];
-        for (const item of sqlItems) {
-          try {
-            const itemResult = await pool.query(`
-              INSERT INTO invoice_items
-                (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
-              VALUES
-                ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-              RETURNING id
-            `, [
-              item.invoice_id,
-              item.product_id,
-              item.description,
-              item.unit,
-              item.quantity,
-              item.rate,
-              item.amount,
-              item.gst_rate,
-              item.hsn_code
-            ]);
-            
-            if (itemResult.rows && itemResult.rows.length > 0) {
-              const itemId = itemResult.rows[0].id;
-              console.log(`Added item ${itemId} to invoice ${invoiceId}`);
-              insertedItems.push(itemId);
-            }
-          } catch (itemError: any) {
-            console.error("Error inserting invoice item:", itemError);
-            throw new Error(`Failed to insert invoice item: ${itemError.message || String(itemError)}`);
+          
+          // Insert the invoice and get the ID
+          const invoiceResult = await pool.query(`
+            INSERT INTO invoices
+              (user_id, customer_id, invoice_number, invoice_date, due_date, notes, status, 
+               subtotal, cgst, sgst, igst, total, terms_and_conditions, template_id, color_theme)
+            VALUES 
+              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            RETURNING id
+          `, [
+            sqlInvoice.user_id,
+            sqlInvoice.customer_id,
+            sqlInvoice.invoice_number,
+            sqlInvoice.invoice_date,
+            sqlInvoice.due_date,
+            sqlInvoice.notes,
+            sqlInvoice.status,
+            sqlInvoice.subtotal,
+            sqlInvoice.cgst,
+            sqlInvoice.sgst,
+            sqlInvoice.igst,
+            sqlInvoice.total,
+            sqlInvoice.terms_and_conditions,
+            sqlInvoice.template_id,
+            sqlInvoice.color_theme
+          ]);
+          
+          if (!invoiceResult.rows || invoiceResult.rows.length === 0) {
+            throw new Error("Failed to create invoice - no ID returned");
           }
+          
+          const invoiceId = invoiceResult.rows[0].id;
+          console.log("Created invoice with ID:", invoiceId);
+          
+          // Process items and prepare for insertion
+          const sqlItems = items.map((item, index) => {
+            // Ensure numeric values are valid numbers
+            const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity || 1);
+            const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0);
+            const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
+            const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate || 0);
+            
+            return {
+              invoice_id: invoiceId,
+              product_id: item.productId || null,
+              description: item.description || `Item ${index + 1}`,
+              unit: item.unit || 'Piece',
+              quantity: isNaN(quantity) ? 1 : quantity,
+              rate: isNaN(rate) ? 0 : rate,
+              amount: isNaN(amount) ? quantity * rate : amount,
+              gst_rate: isNaN(gstRate) ? 0 : gstRate,
+              hsn_code: item.hsnCode || null
+            };
+          });
+          
+          // Insert each item in the same transaction
+          console.log("Inserting", sqlItems.length, "invoice items...");
+          
+          let insertedItems = [];
+          for (const item of sqlItems) {
+            try {
+              const itemResult = await pool.query(`
+                INSERT INTO invoice_items
+                  (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
+                VALUES
+                  ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                RETURNING id
+              `, [
+                item.invoice_id,
+                item.product_id,
+                item.description,
+                item.unit,
+                item.quantity,
+                item.rate,
+                item.amount,
+                item.gst_rate,
+                item.hsn_code
+              ]);
+              
+              if (itemResult.rows && itemResult.rows.length > 0) {
+                const itemId = itemResult.rows[0].id;
+                console.log(`Added item ${itemId} to invoice ${invoiceId}`);
+                insertedItems.push(itemId);
+              }
+            } catch (itemError: any) {
+              console.error("Error inserting invoice item:", itemError);
+              throw new Error(`Failed to insert invoice item: ${itemError.message || String(itemError)}`);
+            }
+          }
+          
+          // If we couldn't insert any items, rollback
+          if (insertedItems.length === 0) {
+            throw new Error("Failed to insert any invoice items");
+          }
+          
+          // Commit the transaction
+          await pool.query('COMMIT');
+          console.log(`Successfully created invoice #${invoiceId} with ${insertedItems.length} items via direct SQL`);
+          
+          // Fetch the complete invoice data for return
+          const completeInvoice = await pool.query(`
+            SELECT * FROM invoices WHERE id = $1
+          `, [invoiceId]);
+          
+          if (!completeInvoice.rows || completeInvoice.rows.length === 0) {
+            throw new Error("Invoice was created but could not be retrieved");
+          }
+          
+          // Transform the invoice data to camelCase
+          const invoiceData = completeInvoice.rows[0];
+          
+          // Refresh Supabase schema cache to make the new records visible
+          try {
+            await refreshSupabaseSchemaCache();
+            console.log("Refreshed Supabase schema cache after direct SQL insert");
+          } catch (cacheError) {
+            console.warn("Could not refresh Supabase schema cache, records may not be immediately visible:", cacheError);
+          }
+          
+          // Return the formatted result
+          return {
+            id: invoiceData.id,
+            userId: invoiceData.user_id,
+            customerId: invoiceData.customer_id,
+            invoiceNumber: invoiceData.invoice_number,
+            invoiceDate: invoiceData.invoice_date,
+            dueDate: invoiceData.due_date,
+            notes: invoiceData.notes || null,
+            status: invoiceData.status,
+            subtotal: invoiceData.subtotal,
+            cgst: invoiceData.cgst || '0.00',
+            sgst: invoiceData.sgst || '0.00',
+            igst: invoiceData.igst || '0.00',
+            total: invoiceData.total,
+            termsAndConditions: invoiceData.terms_and_conditions || null,
+            templateId: invoiceData.template_id || 'standard',
+            colorTheme: invoiceData.color_theme || 'blue'
+          };
+        } catch (txError: any) {
+          // If anything goes wrong, rollback the transaction
+          console.error("Transaction failed, rolling back:", txError);
+          try {
+            await pool.query('ROLLBACK');
+          } catch (rollbackError) {
+            console.error("Error during rollback:", rollbackError);
+          }
+          throw txError;
+        } finally {
+          await pool.end();
         }
-        
-        // If we couldn't insert any items, rollback
-        if (insertedItems.length === 0) {
-          throw new Error("Failed to insert any invoice items");
-        }
-        
-        // Commit the transaction
-        await pool.query('COMMIT');
-        console.log(`Successfully created invoice #${invoiceId} with ${insertedItems.length} items via direct SQL`);
-        
-        // Refresh Supabase schema cache to make the new records visible
-        try {
-          await refreshSupabaseSchemaCache();
-          console.log("Refreshed Supabase schema cache after direct SQL insert");
-        } catch (cacheError) {
-          console.warn("Could not refresh Supabase schema cache, records may not be immediately visible:", cacheError);
-        }
-        
-        // Fetch the complete invoice data for return
-        const completeInvoice = await pool.query(`
-          SELECT * FROM invoices WHERE id = $1
-        `, [invoiceId]);
-        
-        if (!completeInvoice.rows || completeInvoice.rows.length === 0) {
-          throw new Error("Invoice was created but could not be retrieved");
-        }
-        
-        // Transform the invoice data to camelCase
-        const invoiceData = completeInvoice.rows[0];
-        
-        // Return the formatted result
-        return {
-          id: invoiceData.id,
-          userId: invoiceData.user_id,
-          customerId: invoiceData.customer_id,
-          invoiceNumber: invoiceData.invoice_number,
-          invoiceDate: invoiceData.invoice_date,
-          dueDate: invoiceData.due_date,
-          notes: invoiceData.notes || null,
-          status: invoiceData.status,
-          subtotal: invoiceData.subtotal,
-          cgst: invoiceData.cgst || '0.00',
-          sgst: invoiceData.sgst || '0.00',
-          igst: invoiceData.igst || '0.00',
-          total: invoiceData.total,
-          termsAndConditions: invoiceData.terms_and_conditions || null,
-          templateId: invoiceData.template_id || 'standard',
-          colorTheme: invoiceData.color_theme || 'blue'
-        };
-        
-      } catch (txError: any) {
-        // If anything goes wrong, rollback the transaction
-        console.error("Transaction failed, rolling back:", txError);
-        try {
-          await pool.query('ROLLBACK');
-        } catch (rollbackError) {
-          console.error("Error during rollback:", rollbackError);
-        }
-        throw new Error(`Invoice creation failed: ${txError.message || String(txError)}`);
-      } finally {
-        // Always close the connection pool
-        await pool.end();
+      } catch (dbError: any) {
+        console.error("Database error:", dbError);
+        throw new Error(`Invoice creation failed: ${dbError.message || String(dbError)}`);
       }
+    } else {
+      throw new Error("No DATABASE_URL available");
     }
   }
-
+  
   async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
     try {
       // Convert partial invoice from camelCase to snake_case
@@ -1438,7 +1176,7 @@ export class SupabaseStorage implements IStorage {
       return undefined;
     }
   }
-
+  
   async deleteInvoice(id: number): Promise<boolean> {
     try {
       // First delete all associated invoice items
@@ -1469,7 +1207,7 @@ export class SupabaseStorage implements IStorage {
       return false;
     }
   }
-
+  
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
     try {
       const { data, error } = await supabase
@@ -1488,7 +1226,7 @@ export class SupabaseStorage implements IStorage {
         invoiceId: item.invoice_id,
         productId: item.product_id,
         description: item.description,
-        unit: item.unit || 'Piece', // Include unit field with default
+        unit: item.unit || 'Piece',
         quantity: item.quantity,
         rate: item.rate,
         amount: item.amount,
@@ -1500,155 +1238,56 @@ export class SupabaseStorage implements IStorage {
       return [];
     }
   }
-
+  
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
     try {
-      // Reset sequences first to avoid conflicts
-      try {
-        // Reset the invoice_items ID sequence to avoid duplicate key errors
-        await supabase.rpc('reset_invoice_items_sequence');
-        console.log("Reset invoice_items sequence successfully");
-      } catch (seqError) {
-        console.error("Failed to reset invoice_items sequence:", seqError);
-        
-        // Using properly imported resetSequences
-        console.log("Attempting to reset sequences with imported function");
-        try {
-          await resetSequences();
-        } catch (resetError) {
-          console.error("Error resetting sequences:", resetError);
-        }
-      }
-      
-      // Ensure numeric values are valid numbers
-      const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
-      const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : item.rate;
-      const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
-      const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : item.gstRate;
-      
-      // Verify values are actually numbers
-      if (isNaN(quantity) || isNaN(rate) || isNaN(amount)) {
-        console.error("Invalid numeric values in invoice item:", { 
-          quantity, rate, amount, description: item.description 
-        });
-      }
-      
-      // Transform to snake_case for Supabase with validation
-      // Don't include ID to let Supabase auto-generate it
+      // Convert camelCase to snake_case for Supabase
       const supabaseItem = {
         invoice_id: item.invoiceId,
-        product_id: item.productId || null,
+        product_id: item.productId,
         description: item.description,
         unit: item.unit || 'Piece',
-        quantity: isNaN(quantity) ? 1 : quantity, // Default to 1 if invalid
-        rate: isNaN(rate) ? 1 : rate, // Default to 1 if invalid
-        amount: isNaN(amount) ? (isNaN(quantity) ? 1 : quantity) * (isNaN(rate) ? 1 : rate) : amount,
-        gst_rate: isNaN(gstRate) ? 0 : gstRate,
-        hsn_code: item.hsnCode || null
+        quantity: item.quantity,
+        rate: item.rate,
+        amount: item.amount,
+        gst_rate: item.gstRate,
+        hsn_code: item.hsnCode
       };
       
-      console.log("Adding invoice item:", supabaseItem);
-      
-      try {
-        // Try to insert using Supabase first
-        const { data, error } = await supabase
-          .from('invoice_items')
-          .insert(supabaseItem)
-          .select()
-          .single();
-          
-        if (error) {
-          console.error("Supabase invoice item insert error:", error);
-          
-          // Check if it's a schema cache error related to 'unit' column
-          if (error.message && error.message.includes('unit')) {
-            console.log("Schema cache error detected for 'unit' column, trying direct SQL insert...");
-            
-            try {
-              // Use direct SQL with neon-serverless for more reliable inserts
-              if (process.env.DATABASE_URL) {
-                console.log("Trying direct SQL connection to insert invoice item...");
-                // Use import from top-level instead of dynamic require
-                const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-                
-                try {
-                  // Insert item using direct SQL to bypass schema cache issues
-                  const result = await pool.query(`
-                    INSERT INTO invoice_items 
-                    (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                    RETURNING id, invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code
-                  `, [
-                    supabaseItem.invoice_id, 
-                    supabaseItem.product_id, 
-                    supabaseItem.description, 
-                    supabaseItem.unit || 'Piece', 
-                    supabaseItem.quantity, 
-                    supabaseItem.rate, 
-                    supabaseItem.amount, 
-                    supabaseItem.gst_rate, 
-                    supabaseItem.hsn_code
-                  ]);
-                  
-                  console.log(`Added invoice item via direct SQL with ID ${result.rows[0].id}`);
-                  
-                  // Transform from row to our expected return format
-                  const insertedItem = result.rows[0];
-                  return {
-                    id: insertedItem.id,
-                    invoiceId: insertedItem.invoice_id,
-                    productId: insertedItem.product_id,
-                    description: insertedItem.description,
-                    unit: insertedItem.unit || 'Piece',
-                    quantity: insertedItem.quantity,
-                    rate: insertedItem.rate,
-                    amount: insertedItem.amount,
-                    gstRate: insertedItem.gst_rate,
-                    hsnCode: insertedItem.hsn_code || null
-                  };
-                } catch (sqlError) {
-                  console.error("Error executing direct SQL for invoice item:", sqlError);
-                  throw sqlError;
-                } finally {
-                  await pool.end();
-                }
-              } else {
-                console.error("No DATABASE_URL available for direct SQL fallback");
-                throw new Error("Cannot insert invoice item: no direct database connection available");
-              }
-            } catch (directSqlError) {
-              console.error("Failed to insert invoice item via direct SQL:", directSqlError);
-              throw directSqlError;
-            }
-          } else {
-            // Not a schema cache issue, just throw the original error
-            throw error;
-          }
-        } else {
-          // Original query succeeded, transform back to camelCase and return
-          return {
-            id: data.id,
-            invoiceId: data.invoice_id,
-            productId: data.product_id,
-            description: data.description,
-            unit: data.unit || 'Piece',
-            quantity: data.quantity,
-            rate: data.rate,
-            amount: data.amount,
-            gstRate: data.gst_rate,
-            hsnCode: data.hsn_code || null
-          };
-        }
-      } catch (insertError) {
-        console.error("Exception during invoice item insert:", insertError);
-        throw insertError;
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .insert(supabaseItem)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase invoice item creation error:", error);
+        throw new Error(`Failed to create invoice item: ${error.message}`);
       }
+      
+      if (!data) {
+        throw new Error("Failed to create invoice item: No data returned");
+      }
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        invoiceId: data.invoice_id,
+        productId: data.product_id,
+        description: data.description,
+        unit: data.unit || 'Piece',
+        quantity: data.quantity,
+        rate: data.rate,
+        amount: data.amount,
+        gstRate: data.gst_rate,
+        hsnCode: data.hsn_code || null
+      };
     } catch (error) {
       console.error("Error adding invoice item:", error);
       throw error;
     }
   }
-
+  
   async updateInvoiceItem(id: number, item: Partial<InsertInvoiceItem>): Promise<InvoiceItem | undefined> {
     try {
       // Convert partial item from camelCase to snake_case
@@ -1695,7 +1334,7 @@ export class SupabaseStorage implements IStorage {
       return undefined;
     }
   }
-
+  
   async deleteInvoiceItem(id: number): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -1714,7 +1353,7 @@ export class SupabaseStorage implements IStorage {
       return false;
     }
   }
-
+  
   async getInvoiceStats(userId: number): Promise<{
     totalInvoices: number;
     totalRevenue: number;
@@ -1722,53 +1361,71 @@ export class SupabaseStorage implements IStorage {
     totalCustomers: number;
   }> {
     try {
-      // Get all invoices for the user
-      const { data: invoicesResult, error: invoicesError } = await supabase
+      // Count total invoices
+      const { count: invoicesCount, error: invoicesError } = await supabase
         .from('invoices')
-        .select('*')
+        .select('*', { count: 'exact', head: true })
         .eq('user_id', userId);
         
       if (invoicesError) {
-        console.error("Supabase invoices fetch error:", invoicesError);
-        return { totalInvoices: 0, totalRevenue: 0, unpaidInvoices: 0, totalCustomers: 0 };
+        console.error("Supabase invoices count error:", invoicesError);
+        throw invoicesError;
       }
       
       // Calculate total revenue
-      const totalRevenue = invoicesResult.reduce(
-        (sum, invoice) => sum + Number(invoice.total), 
-        0
-      );
+      const { data: revenueData, error: revenueError } = await supabase
+        .from('invoices')
+        .select('total')
+        .eq('user_id', userId);
+        
+      if (revenueError) {
+        console.error("Supabase revenue calculation error:", revenueError);
+        throw revenueError;
+      }
       
-      // Count unpaid invoices (status is pending)
-      const unpaidInvoices = invoicesResult.filter(
-        invoice => invoice.status === 'pending'
-      ).length;
+      // Calculate total revenue from data
+      const totalRevenue = revenueData.reduce((sum, invoice) => {
+        const total = parseFloat(invoice.total || '0');
+        return sum + (isNaN(total) ? 0 : total);
+      }, 0);
+      
+      // Count unpaid invoices
+      const { count: unpaidCount, error: unpaidError } = await supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('status', 'unpaid');
+        
+      if (unpaidError) {
+        console.error("Supabase unpaid invoices count error:", unpaidError);
+        throw unpaidError;
+      }
       
       // Count total customers
-      const { data: customersResult, error: customersError } = await supabase
+      const { count: customersCount, error: customersError } = await supabase
         .from('customers')
-        .select('*')
+        .select('*', { count: 'exact', head: true })
         .eq('user_id', userId);
         
       if (customersError) {
-        console.error("Supabase customers fetch error:", customersError);
-        return { 
-          totalInvoices: invoicesResult.length, 
-          totalRevenue, 
-          unpaidInvoices, 
-          totalCustomers: 0 
-        };
+        console.error("Supabase customers count error:", customersError);
+        throw customersError;
       }
       
       return {
-        totalInvoices: invoicesResult.length,
-        totalRevenue: totalRevenue,
-        unpaidInvoices: unpaidInvoices,
-        totalCustomers: customersResult.length
+        totalInvoices: invoicesCount || 0,
+        totalRevenue,
+        unpaidInvoices: unpaidCount || 0,
+        totalCustomers: customersCount || 0
       };
     } catch (error) {
-      console.error("Error fetching invoice stats:", error);
-      return { totalInvoices: 0, totalRevenue: 0, unpaidInvoices: 0, totalCustomers: 0 };
+      console.error("Error calculating invoice stats:", error);
+      return {
+        totalInvoices: 0,
+        totalRevenue: 0,
+        unpaidInvoices: 0,
+        totalCustomers: 0
+      };
     }
   }
 }
