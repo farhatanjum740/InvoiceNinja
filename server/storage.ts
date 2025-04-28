@@ -1079,6 +1079,7 @@ export class SupabaseStorage implements IStorage {
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
     try {
       // Transform invoice to snake_case for Supabase
+      // Omit any ID fields to let Supabase auto-generate them
       const supabaseInvoice = {
         user_id: invoice.userId,
         customer_id: invoice.customerId,
@@ -1093,8 +1094,8 @@ export class SupabaseStorage implements IStorage {
         igst: invoice.igst || '0.00',  // Ensure non-null default value
         total: invoice.total,
         terms_and_conditions: invoice.termsAndConditions,
-        template_id: invoice.templateId,
-        color_theme: invoice.colorTheme
+        template_id: invoice.templateId || 'standard',
+        color_theme: invoice.colorTheme || 'blue'
       };
       
       console.log("Saving invoice to Supabase:", supabaseInvoice);
@@ -1114,6 +1115,7 @@ export class SupabaseStorage implements IStorage {
       // If there are items, insert them with the new invoice ID
       if (items.length > 0) {
         // Transform items to snake_case for Supabase
+        // Don't include ID to let Supabase generate it
         const supabaseItems = items.map(item => ({
           invoice_id: invoiceData.id,
           product_id: item.productId,
@@ -1125,6 +1127,8 @@ export class SupabaseStorage implements IStorage {
           hsn_code: item.hsnCode || null
         }));
         
+        console.log("Saving invoice items to Supabase:", supabaseItems);
+        
         // Insert all items
         const { error: itemsError } = await supabase
           .from('invoice_items')
@@ -1132,7 +1136,7 @@ export class SupabaseStorage implements IStorage {
           
         if (itemsError) {
           console.error("Supabase invoice items insert error:", itemsError);
-          // Consider rolling back invoice if items fail (by deleting the invoice)
+          // Roll back invoice if items fail
           await supabase.from('invoices').delete().eq('id', invoiceData.id);
           throw itemsError;
         }
@@ -1286,6 +1290,7 @@ export class SupabaseStorage implements IStorage {
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
     try {
       // Transform to snake_case for Supabase
+      // Don't include ID to let Supabase auto-generate it
       const supabaseItem = {
         invoice_id: item.invoiceId,
         product_id: item.productId,
@@ -1294,8 +1299,10 @@ export class SupabaseStorage implements IStorage {
         rate: item.rate,
         amount: item.amount,
         gst_rate: item.gstRate,
-        hsn_code: item.hsnCode
+        hsn_code: item.hsnCode || null
       };
+      
+      console.log("Adding invoice item:", supabaseItem);
       
       // Insert using Supabase
       const { data, error } = await supabase
