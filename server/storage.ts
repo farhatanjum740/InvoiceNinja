@@ -988,15 +988,18 @@ export class SupabaseStorage implements IStorage {
         userId: data.user_id,
         customerId: data.customer_id,
         invoiceNumber: data.invoice_number,
-        date: data.date,
+        invoiceDate: data.invoice_date,
         dueDate: data.due_date,
         notes: data.notes || null,
         status: data.status,
         subtotal: data.subtotal,
-        tax: data.tax,
-        discount: data.discount,
+        cgst: data.cgst || '0.00',
+        sgst: data.sgst || '0.00',
+        igst: data.igst || '0.00',
         total: data.total,
-        termsAndConditions: data.terms_and_conditions || null
+        termsAndConditions: data.terms_and_conditions || null,
+        templateId: data.template_id || 'standard',
+        colorTheme: data.color_theme || 'blue'
       };
     } catch (error) {
       console.error("Error fetching invoice:", error);
@@ -1062,7 +1065,8 @@ export class SupabaseStorage implements IStorage {
         quantity: item.quantity,
         rate: item.rate,
         amount: item.amount,
-        gstRate: item.gst_rate
+        gstRate: item.gst_rate,
+        hsnCode: item.hsn_code || null
       }));
       
       return { invoice, items };
@@ -1117,7 +1121,8 @@ export class SupabaseStorage implements IStorage {
           quantity: item.quantity,
           rate: item.rate,
           amount: item.amount,
-          gst_rate: item.gstRate
+          gst_rate: item.gstRate,
+          hsn_code: item.hsnCode || null
         }));
         
         // Insert all items
@@ -1139,15 +1144,18 @@ export class SupabaseStorage implements IStorage {
         userId: invoiceData.user_id,
         customerId: invoiceData.customer_id,
         invoiceNumber: invoiceData.invoice_number,
-        date: invoiceData.date,
+        invoiceDate: invoiceData.invoice_date,
         dueDate: invoiceData.due_date,
         notes: invoiceData.notes || null,
         status: invoiceData.status,
         subtotal: invoiceData.subtotal,
-        tax: invoiceData.tax,
-        discount: invoiceData.discount,
+        cgst: invoiceData.cgst || '0.00',
+        sgst: invoiceData.sgst || '0.00',
+        igst: invoiceData.igst || '0.00',
         total: invoiceData.total,
-        termsAndConditions: invoiceData.terms_and_conditions || null
+        termsAndConditions: invoiceData.terms_and_conditions || null,
+        templateId: invoiceData.template_id || 'standard',
+        colorTheme: invoiceData.color_theme || 'blue'
       };
     } catch (error) {
       console.error("Error creating invoice:", error);
@@ -1163,15 +1171,18 @@ export class SupabaseStorage implements IStorage {
       if ('userId' in invoice) supabaseInvoice.user_id = invoice.userId;
       if ('customerId' in invoice) supabaseInvoice.customer_id = invoice.customerId;
       if ('invoiceNumber' in invoice) supabaseInvoice.invoice_number = invoice.invoiceNumber;
-      if ('date' in invoice) supabaseInvoice.date = invoice.date;
+      if ('invoiceDate' in invoice) supabaseInvoice.invoice_date = invoice.invoiceDate;
       if ('dueDate' in invoice) supabaseInvoice.due_date = invoice.dueDate;
       if ('notes' in invoice) supabaseInvoice.notes = invoice.notes;
       if ('status' in invoice) supabaseInvoice.status = invoice.status;
       if ('subtotal' in invoice) supabaseInvoice.subtotal = invoice.subtotal;
-      if ('tax' in invoice) supabaseInvoice.tax = invoice.tax;
-      if ('discount' in invoice) supabaseInvoice.discount = invoice.discount;
+      if ('cgst' in invoice) supabaseInvoice.cgst = invoice.cgst || '0.00';
+      if ('sgst' in invoice) supabaseInvoice.sgst = invoice.sgst || '0.00';
+      if ('igst' in invoice) supabaseInvoice.igst = invoice.igst || '0.00';
       if ('total' in invoice) supabaseInvoice.total = invoice.total;
       if ('termsAndConditions' in invoice) supabaseInvoice.terms_and_conditions = invoice.termsAndConditions;
+      if ('templateId' in invoice) supabaseInvoice.template_id = invoice.templateId;
+      if ('colorTheme' in invoice) supabaseInvoice.color_theme = invoice.colorTheme;
       
       // Update using Supabase
       const { data, error } = await supabase
@@ -1192,15 +1203,18 @@ export class SupabaseStorage implements IStorage {
         userId: data.user_id,
         customerId: data.customer_id,
         invoiceNumber: data.invoice_number,
-        date: data.date,
+        invoiceDate: data.invoice_date,
         dueDate: data.due_date,
         notes: data.notes || null,
         status: data.status,
         subtotal: data.subtotal,
-        tax: data.tax,
-        discount: data.discount,
+        cgst: data.cgst || '0.00',
+        sgst: data.sgst || '0.00',
+        igst: data.igst || '0.00',
         total: data.total,
-        termsAndConditions: data.terms_and_conditions || null
+        termsAndConditions: data.terms_and_conditions || null,
+        templateId: data.template_id || 'standard',
+        colorTheme: data.color_theme || 'blue'
       };
     } catch (error) {
       console.error("Error updating invoice:", error);
