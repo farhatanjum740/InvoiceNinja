@@ -2,6 +2,7 @@ import { type User, type InsertUser, type Company, type InsertCompany, type Cust
 import { supabase } from "./db";
 import session from "express-session";
 import MemoryStore from "memorystore";
+import { Pool } from "@neondatabase/serverless";
 
 // Initialize the memory store for sessions
 const MemStore = MemoryStore(session);
@@ -1174,7 +1175,7 @@ export class SupabaseStorage implements IStorage {
                 // Use direct SQL with neon-serverless for more reliable inserts
                 if (process.env.DATABASE_URL) {
                   console.log("Trying direct SQL connection to insert invoice items...");
-                  const { Pool } = require('@neondatabase/serverless');
+                  // Use import from top-level instead of dynamic require
                   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
                   
                   try {
@@ -1392,13 +1393,8 @@ export class SupabaseStorage implements IStorage {
       } catch (seqError) {
         console.error("Failed to reset invoice_items sequence:", seqError);
         
-        // Try alternative method if the RPC fails
-        try {
-          const { resetSequences } = require('./utils/reset-sequences');
-          await resetSequences();
-        } catch (utilError) {
-          console.error("Failed to reset sequences using utility function:", utilError);
-        }
+        // Just log the error, we can't use dynamic requires in ESM
+        console.log("Note: Can't load resetSequences dynamically in this environment");
       }
       
       // Ensure numeric values are valid numbers
@@ -1449,7 +1445,7 @@ export class SupabaseStorage implements IStorage {
               // Use direct SQL with neon-serverless for more reliable inserts
               if (process.env.DATABASE_URL) {
                 console.log("Trying direct SQL connection to insert invoice item...");
-                const { Pool } = require('@neondatabase/serverless');
+                // Use import from top-level instead of dynamic require
                 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
                 
                 try {
