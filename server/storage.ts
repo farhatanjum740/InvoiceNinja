@@ -1158,16 +1158,73 @@ export class SupabaseStorage implements IStorage {
         console.log("Saving invoice items to Supabase:", supabaseItems);
         
         try {
-          // Insert all items
+          // Try to insert all items using Supabase
           const { error: itemsError } = await supabase
             .from('invoice_items')
             .insert(supabaseItems);
             
           if (itemsError) {
             console.error("Supabase invoice items insert error:", itemsError);
-            // Roll back invoice if items fail
-            await supabase.from('invoices').delete().eq('id', invoiceData.id);
-            throw itemsError;
+            
+            // Check if the error is related to schema cache - if yes, try direct SQL
+            if (itemsError.message && itemsError.message.includes('unit')) {
+              console.log("Schema cache error detected for 'unit' column, trying direct SQL approach...");
+              
+              try {
+                // Use direct SQL with neon-serverless for more reliable inserts
+                if (process.env.DATABASE_URL) {
+                  console.log("Trying direct SQL connection to insert invoice items...");
+                  const { Pool } = require('@neondatabase/serverless');
+                  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+                  
+                  try {
+                    // Insert each item using direct SQL to bypass schema cache issues
+                    for (const item of supabaseItems) {
+                      const result = await pool.query(`
+                        INSERT INTO invoice_items 
+                        (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                        RETURNING id
+                      `, [
+                        item.invoice_id, 
+                        item.product_id, 
+                        item.description, 
+                        item.unit || 'Piece', 
+                        item.quantity, 
+                        item.rate, 
+                        item.amount, 
+                        item.gst_rate, 
+                        item.hsn_code
+                      ]);
+                      
+                      console.log(`Added invoice item via direct SQL with ID ${result.rows[0].id}`);
+                    }
+                    console.log("Successfully inserted all invoice items via direct SQL");
+                  } catch (sqlError) {
+                    console.error("Error executing direct SQL for invoice items:", sqlError);
+                    // Roll back invoice if direct SQL insert fails
+                    await supabase.from('invoices').delete().eq('id', invoiceData.id);
+                    throw sqlError;
+                  } finally {
+                    await pool.end();
+                  }
+                } else {
+                  // No DATABASE_URL, roll back
+                  console.error("No DATABASE_URL available for direct SQL fallback");
+                  await supabase.from('invoices').delete().eq('id', invoiceData.id);
+                  throw new Error("Cannot insert invoice items: no direct database connection available");
+                }
+              } catch (directSqlError) {
+                console.error("Failed to insert invoice items via direct SQL:", directSqlError);
+                // Roll back invoice if direct SQL approach fails
+                await supabase.from('invoices').delete().eq('id', invoiceData.id);
+                throw directSqlError;
+              }
+            } else {
+              // Error not related to schema cache, roll back
+              await supabase.from('invoices').delete().eq('id', invoiceData.id);
+              throw itemsError;
+            }
           }
         } catch (itemInsertError) {
           console.error("Exception during invoice items insert:", itemInsertError);
@@ -1374,7 +1431,7 @@ export class SupabaseStorage implements IStorage {
       console.log("Adding invoice item:", supabaseItem);
       
       try {
-        // Insert using Supabase
+        // Try to insert using Supabase first
         const { data, error } = await supabase
           .from('invoice_items')
           .insert(supabaseItem)
@@ -1383,22 +1440,86 @@ export class SupabaseStorage implements IStorage {
           
         if (error) {
           console.error("Supabase invoice item insert error:", error);
-          throw error;
+          
+          // Check if it's a schema cache error related to 'unit' column
+          if (error.message && error.message.includes('unit')) {
+            console.log("Schema cache error detected for 'unit' column, trying direct SQL insert...");
+            
+            try {
+              // Use direct SQL with neon-serverless for more reliable inserts
+              if (process.env.DATABASE_URL) {
+                console.log("Trying direct SQL connection to insert invoice item...");
+                const { Pool } = require('@neondatabase/serverless');
+                const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+                
+                try {
+                  // Insert item using direct SQL to bypass schema cache issues
+                  const result = await pool.query(`
+                    INSERT INTO invoice_items 
+                    (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    RETURNING id, invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code
+                  `, [
+                    supabaseItem.invoice_id, 
+                    supabaseItem.product_id, 
+                    supabaseItem.description, 
+                    supabaseItem.unit || 'Piece', 
+                    supabaseItem.quantity, 
+                    supabaseItem.rate, 
+                    supabaseItem.amount, 
+                    supabaseItem.gst_rate, 
+                    supabaseItem.hsn_code
+                  ]);
+                  
+                  console.log(`Added invoice item via direct SQL with ID ${result.rows[0].id}`);
+                  
+                  // Transform from row to our expected return format
+                  const insertedItem = result.rows[0];
+                  return {
+                    id: insertedItem.id,
+                    invoiceId: insertedItem.invoice_id,
+                    productId: insertedItem.product_id,
+                    description: insertedItem.description,
+                    unit: insertedItem.unit || 'Piece',
+                    quantity: insertedItem.quantity,
+                    rate: insertedItem.rate,
+                    amount: insertedItem.amount,
+                    gstRate: insertedItem.gst_rate,
+                    hsnCode: insertedItem.hsn_code || null
+                  };
+                } catch (sqlError) {
+                  console.error("Error executing direct SQL for invoice item:", sqlError);
+                  throw sqlError;
+                } finally {
+                  await pool.end();
+                }
+              } else {
+                console.error("No DATABASE_URL available for direct SQL fallback");
+                throw new Error("Cannot insert invoice item: no direct database connection available");
+              }
+            } catch (directSqlError) {
+              console.error("Failed to insert invoice item via direct SQL:", directSqlError);
+              throw directSqlError;
+            }
+          } else {
+            // Not a schema cache issue, just throw the original error
+            throw error;
+          }
+        } else {
+          // Original query succeeded, transform back to camelCase and return
+          return {
+            id: data.id,
+            invoiceId: data.invoice_id,
+            productId: data.product_id,
+            description: data.description,
+            unit: data.unit || 'Piece',
+            quantity: data.quantity,
+            rate: data.rate,
+            amount: data.amount,
+            gstRate: data.gst_rate,
+            hsnCode: data.hsn_code || null
+          };
         }
-        
-        // Transform back to camelCase
-        return {
-          id: data.id,
-          invoiceId: data.invoice_id,
-          productId: data.product_id,
-          description: data.description,
-          unit: data.unit || 'Piece',
-          quantity: data.quantity,
-          rate: data.rate,
-          amount: data.amount,
-          gstRate: data.gst_rate,
-          hsnCode: data.hsn_code || null
-        };
       } catch (insertError) {
         console.error("Exception during invoice item insert:", insertError);
         throw insertError;

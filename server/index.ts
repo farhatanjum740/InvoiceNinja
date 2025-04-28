@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { updateSupabaseSchema, refreshSupabaseSchemaCache } from "./db";
 
 const app = express();
 // Increase JSON payload size limit to 10MB for image uploads
@@ -38,6 +39,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Make sure Supabase schema is up to date
+  try {
+    await updateSupabaseSchema();
+  } catch (error) {
+    console.error('Failed to update schema, but continuing server startup:', error);
+  }
+  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
