@@ -3,7 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 // Dynamically fetch Supabase configuration from server
 async function fetchSupabaseConfig() {
   try {
-    const response = await fetch('/api/env');
+    // Set a timeout for the fetch to prevent hanging indefinitely
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch('/api/env', { 
+      signal: controller.signal 
+    });
+    
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
       throw new Error('Failed to fetch Supabase configuration');
     }
@@ -14,7 +23,7 @@ async function fetchSupabaseConfig() {
       key: data.VITE_SUPABASE_KEY
     };
   } catch (error) {
-    console.error('Error fetching Supabase configuration:', error);
+    console.error('Error fetching Supabase configuration, using fallback:', error);
     
     // Fallback to environment variables if server fetch fails
     return {
@@ -60,60 +69,18 @@ export const STORAGE_BUCKETS = {
   INVOICE_ATTACHMENTS: 'invoice-attachments'
 };
 
-// Utility for initializing storage buckets
+// Utility for initializing storage buckets - simplified to avoid security policy errors
 export async function initializeStorage() {
   console.log("Initializing Supabase storage...");
   
-  try {
-    // Check if buckets exist first
-    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-    
-    if (listError) {
-      console.error("Error listing buckets:", listError);
-      if (listError.message.includes("row-level security policy")) {
-        console.warn("Storage bucket initialization requires admin privileges. This should be done on the server side or using a service role key.");
-        return;
-      }
-    }
-    
-    const existingBuckets = new Set(buckets?.map(b => b.name) || []);
-    
-    // Create company logos bucket if it doesn't exist
-    if (!existingBuckets.has(STORAGE_BUCKETS.COMPANY_LOGOS)) {
-      console.log("Creating company logos bucket...");
-      try {
-        const { error: logoBucketError } = await supabase.storage.createBucket(
-          STORAGE_BUCKETS.COMPANY_LOGOS,
-          { public: true }
-        );
-        
-        if (logoBucketError) {
-          console.warn("Could not create company logos bucket:", logoBucketError);
-        }
-      } catch (err) {
-        console.warn("Exception creating company logos bucket:", err);
-      }
-    }
-    
-    // Create invoice attachments bucket if it doesn't exist
-    if (!existingBuckets.has(STORAGE_BUCKETS.INVOICE_ATTACHMENTS)) {
-      console.log("Creating invoice attachments bucket...");
-      try {
-        const { error: attachmentBucketError } = await supabase.storage.createBucket(
-          STORAGE_BUCKETS.INVOICE_ATTACHMENTS,
-          { public: true }
-        );
-        
-        if (attachmentBucketError) {
-          console.warn("Could not create invoice attachments bucket:", attachmentBucketError);
-        }
-      } catch (err) {
-        console.warn("Exception creating invoice attachments bucket:", err);
-      }
-    }
-  } catch (error) {
-    console.warn("Error initializing storage:", error);
-  }
+  // The bucket creation operations are admin-only operations that should be done on the backend
+  // or during project setup with a service role key. For now, we'll just log the information
+  // and assume buckets have been created during initial setup.
+  
+  console.log("Assuming storage buckets already exist on Supabase");
+  console.log("Using buckets:", Object.values(STORAGE_BUCKETS));
+  
+  // If you want to create buckets, use Supabase Dashboard or a migration script with admin privileges
 }
 
 // Utility for uploading files
@@ -175,5 +142,4 @@ export async function deleteFile(bucket: string, path: string): Promise<boolean>
   }
 }
 
-// Call initialization on import
-initializeStorage();
+// Initialize storage only when explicitly called from providers.tsx
