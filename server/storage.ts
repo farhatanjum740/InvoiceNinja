@@ -464,18 +464,23 @@ export class DatabaseStorage implements IStorage {
 
   async createProduct(product: InsertProduct): Promise<Product> {
     try {
+      // First create the product in PostgreSQL to get a unique ID
+      const [newProduct] = await db.insert(products).values(product).returning();
+      
+      // Now with the assigned ID, create in Supabase
       // Transform to snake_case for Supabase
       const supabaseProduct = {
-        user_id: product.userId,
-        name: product.name,
-        description: product.description,
-        hsn_code: product.hsnCode,
-        unit: product.unit,
-        rate: product.rate,
-        gst_rate: product.gstRate
+        id: newProduct.id, // Use the same ID
+        user_id: newProduct.userId,
+        name: newProduct.name,
+        description: newProduct.description,
+        hsn_code: newProduct.hsnCode,
+        unit: newProduct.unit,
+        rate: newProduct.rate,
+        gst_rate: newProduct.gstRate
       };
       
-      // Insert using Supabase
+      // Insert using Supabase with the same ID
       const { data, error } = await supabase
         .from('products')
         .insert(supabaseProduct)
@@ -484,12 +489,11 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase product insert error:", error);
-        // Fall back to direct DB insert
-        const [newProduct] = await db.insert(products).values(product).returning();
+        // Already created in PostgreSQL, so we can return that
         return newProduct;
       }
       
-      // Transform back to camelCase
+      // Transform back to camelCase (though should be same as newProduct)
       return {
         id: data.id,
         userId: data.user_id,
@@ -502,7 +506,7 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error creating product:", error);
-      // Fall back to direct DB insert
+      // Try direct DB insert as last resort
       const [newProduct] = await db.insert(products).values(product).returning();
       return newProduct;
     }
@@ -510,34 +514,43 @@ export class DatabaseStorage implements IStorage {
 
   async updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined> {
     try {
-      // Transform to snake_case for Supabase
-      const supabaseProduct: Record<string, any> = {};
-      if (product.userId !== undefined) supabaseProduct.user_id = product.userId;
-      if (product.name !== undefined) supabaseProduct.name = product.name;
-      if (product.description !== undefined) supabaseProduct.description = product.description;
-      if (product.hsnCode !== undefined) supabaseProduct.hsn_code = product.hsnCode;
-      if (product.unit !== undefined) supabaseProduct.unit = product.unit;
-      if (product.rate !== undefined) supabaseProduct.rate = product.rate;
-      if (product.gstRate !== undefined) supabaseProduct.gst_rate = product.gstRate;
+      // First update the product in PostgreSQL
+      const [updatedProduct] = await db
+        .update(products)
+        .set(product)
+        .where(eq(products.id, id))
+        .returning();
       
-      // Update using Supabase
+      if (!updatedProduct) {
+        return undefined;
+      }
+      
+      // Transform to snake_case for Supabase
+      const supabaseProduct: Record<string, any> = {
+        id: updatedProduct.id,
+        user_id: updatedProduct.userId,
+        name: updatedProduct.name,
+        description: updatedProduct.description,
+        hsn_code: updatedProduct.hsnCode,
+        unit: updatedProduct.unit,
+        rate: updatedProduct.rate,
+        gst_rate: updatedProduct.gstRate
+      };
+      
+      // Update using Supabase (use upsert in case it doesn't exist in Supabase yet)
       const { data, error } = await supabase
         .from('products')
-        .update(supabaseProduct)
-        .eq('id', id)
+        .upsert(supabaseProduct)
         .select()
         .single();
         
       if (error) {
         console.error("Supabase product update error:", error);
-        // Fall back to direct DB update
-        const [updatedProduct] = await db.update(products).set(product).where(eq(products.id, id)).returning();
+        // Already updated in PostgreSQL, so return that
         return updatedProduct;
       }
       
-      if (!data) return undefined;
-      
-      // Transform back to camelCase
+      // Transform back to camelCase (though should be same as updatedProduct)
       return {
         id: data.id,
         userId: data.user_id,
@@ -558,22 +571,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProduct(id: number): Promise<boolean> {
     try {
-      // Delete using Supabase
+      // First delete from PostgreSQL
+      const [deletedProduct] = await db.delete(products).where(eq(products.id, id)).returning();
+      
+      if (!deletedProduct) {
+        return false;
+      }
+      
+      // Then delete from Supabase
       const { error } = await supabase.from('products').delete().eq('id', id);
         
       if (error) {
         console.error("Supabase product delete error:", error);
-        // Fall back to direct DB delete
-        const [deletedProduct] = await db.delete(products).where(eq(products.id, id)).returning();
-        return !!deletedProduct;
+        // Already deleted from PostgreSQL, so consider it a success
+        return true;
       }
       
       return true;
     } catch (error) {
       console.error("Error deleting product:", error);
-      // Fall back to direct DB delete
-      const [deletedProduct] = await db.delete(products).where(eq(products.id, id)).returning();
-      return !!deletedProduct;
+      // Try direct DB delete as last resort
+      try {
+        const [deletedProduct] = await db.delete(products).where(eq(products.id, id)).returning();
+        return !!deletedProduct;
+      } catch (dbError) {
+        console.error("PostgreSQL delete error:", dbError);
+        return false;
+      }
     }
   }
 
