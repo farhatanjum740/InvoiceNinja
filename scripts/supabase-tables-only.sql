@@ -1,4 +1,5 @@
 -- Create tables for Invoice Management System in Supabase
+-- Tables only without RLS policies - useful if you're having issues with the policies
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
@@ -99,39 +100,3 @@ CREATE INDEX IF NOT EXISTS idx_products_user_id ON products(user_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id);
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
-
--- Enable Row Level Security (RLS)
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
-
--- Create policies for users
-CREATE POLICY "Users can view their own data" ON users
-  FOR SELECT USING ((auth.uid())::integer = id);
-
--- Create policies for companies
-CREATE POLICY "Users can manage their own companies" ON companies
-  FOR ALL USING ((auth.uid())::integer = user_id);
-
--- Create policies for customers
-CREATE POLICY "Users can manage their own customers" ON customers
-  FOR ALL USING ((auth.uid())::integer = user_id);
-
--- Create policies for products
-CREATE POLICY "Users can manage their own products" ON products
-  FOR ALL USING ((auth.uid())::integer = user_id);
-
--- Create policies for invoices
-CREATE POLICY "Users can manage their own invoices" ON invoices
-  FOR ALL USING ((auth.uid())::integer = user_id);
-
--- Create policies for invoice items
-CREATE POLICY "Users can manage their own invoice items" ON invoice_items
-  FOR ALL USING (
-    (auth.uid())::integer IN (
-      SELECT user_id FROM invoices WHERE id = invoice_id
-    )
-  );
