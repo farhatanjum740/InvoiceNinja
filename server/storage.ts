@@ -64,24 +64,27 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    try {
-      // Use PostgreSQL session store with Supabase connection
-      this.sessionStore = new PostgresSessionStore({ 
-        conObject: {
-          connectionString: process.env.SUPABASE_POSTGRES_URL || process.env.DATABASE_URL || '',
-          ssl: { rejectUnauthorized: false }
-        },
-        createTableIfMissing: true 
-      });
-      console.log('Using PostgreSQL session store with Supabase');
-    } catch (error) {
-      console.error('Failed to create PostgreSQL session store, falling back to memory store', error);
-      // Fallback to memory store if PostgreSQL connection fails
-      const MemStore = MemoryStore(session);
-      this.sessionStore = new MemStore({
-        checkPeriod: 86400000 // 24 hours
-      });
-    }
+    // Use memory store for sessions to avoid connection issues
+    const MemStore = MemoryStore(session);
+    this.sessionStore = new MemStore({
+      checkPeriod: 86400000 // 24 hours
+    });
+    console.log('Using memory store for sessions');
+    
+    // We'll implement PostgreSQL session store later when connection issues are resolved
+    // For reference, here's how to set it up:
+    //
+    // this.sessionStore = new PostgresSessionStore({ 
+    //   conObject: {
+    //     host: process.env.PGHOST,
+    //     port: parseInt(process.env.PGPORT || '5432'),
+    //     database: process.env.PGDATABASE,
+    //     user: process.env.PGUSER,
+    //     password: process.env.PGPASSWORD,
+    //     ssl: { rejectUnauthorized: false }
+    //   },
+    //   createTableIfMissing: true 
+    // });
   }
 
   async getUser(id: number): Promise<User | undefined> {
