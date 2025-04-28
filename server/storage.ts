@@ -1052,6 +1052,7 @@ export class SupabaseStorage implements IStorage {
         invoiceId: item.invoice_id,
         productId: item.product_id,
         description: item.description,
+        unit: item.unit || 'Piece', // Adding unit field with default value
         quantity: item.quantity,
         rate: item.rate,
         amount: item.amount,
@@ -1311,11 +1312,12 @@ export class SupabaseStorage implements IStorage {
         invoiceId: item.invoice_id,
         productId: item.product_id,
         description: item.description,
+        unit: item.unit || 'Piece', // Include unit field with default
         quantity: item.quantity,
         rate: item.rate,
         amount: item.amount,
         gstRate: item.gst_rate,
-        hsnCode: item.hsn_code || null  // Added based on schema
+        hsnCode: item.hsn_code || null
       }));
     } catch (error) {
       console.error("Error fetching invoice items:", error);
@@ -1415,6 +1417,7 @@ export class SupabaseStorage implements IStorage {
       if ('invoiceId' in item) supabaseItem.invoice_id = item.invoiceId;
       if ('productId' in item) supabaseItem.product_id = item.productId;
       if ('description' in item) supabaseItem.description = item.description;
+      if ('unit' in item) supabaseItem.unit = item.unit;
       if ('quantity' in item) supabaseItem.quantity = item.quantity;
       if ('rate' in item) supabaseItem.rate = item.rate;
       if ('amount' in item) supabaseItem.amount = item.amount;
@@ -1440,6 +1443,7 @@ export class SupabaseStorage implements IStorage {
         invoiceId: data.invoice_id,
         productId: data.product_id,
         description: data.description,
+        unit: data.unit || 'Piece',
         quantity: data.quantity,
         rate: data.rate,
         amount: data.amount,
