@@ -246,9 +246,16 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     console.log("Validated item:", validatedItem);
     
     const newItems = [...invoiceItems, validatedItem];
-    console.log("New invoice items array:", newItems);
+    console.log("New invoice items array:", newItems, "length:", newItems.length);
     
+    // First update state
     setInvoiceItems(newItems);
+    
+    // Then update the UI with a toast notification for feedback
+    toast({
+      title: "Item added",
+      description: `Added ${validatedItem.description} to the invoice.`,
+    });
     
     // Save form state after adding item
     setTimeout(() => {
