@@ -111,6 +111,7 @@ export const invoiceItems = pgTable("invoice_items", {
   productId: integer("product_id").references(() => products.id),
   description: text("description").notNull(),
   hsnCode: text("hsn_code"),
+  unit: text("unit").default("Piece").notNull(),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull(),
   rate: decimal("rate", { precision: 10, scale: 2 }).notNull(),
   gstRate: integer("gst_rate").notNull(),

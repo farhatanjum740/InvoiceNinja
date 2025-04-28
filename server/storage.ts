@@ -1070,11 +1070,20 @@ export class SupabaseStorage implements IStorage {
     try {
       // Reset sequences first to avoid conflicts
       try {
-        // Reset the invoices ID sequence to avoid duplicate key errors
+        // Reset both sequences to avoid duplicate key errors
         await supabase.rpc('reset_invoices_sequence');
-        console.log("Reset invoices sequence successfully");
+        await supabase.rpc('reset_invoice_items_sequence');
+        console.log("Reset invoice and invoice_items sequences successfully");
       } catch (seqError) {
-        console.error("Failed to reset invoices sequence:", seqError);
+        console.error("Failed to reset sequences, will attempt alternative method:", seqError);
+        
+        // Try to reset sequences using the utility function as backup
+        try {
+          const { resetSequences } = require('./utils/reset-sequences');
+          await resetSequences();
+        } catch (utilError) {
+          console.error("Failed to reset sequences using utility function:", utilError);
+        }
       }
 
       // Transform invoice to snake_case for Supabase
@@ -1112,33 +1121,61 @@ export class SupabaseStorage implements IStorage {
       }
       
       // If there are items, insert them with the new invoice ID
-      if (items.length > 0) {
-        // Transform items to snake_case for Supabase
-        // Don't include ID to let Supabase generate it
-        const supabaseItems = items.map(item => ({
-          invoice_id: invoiceData.id,
-          product_id: item.productId,
-          description: item.description,
-          quantity: item.quantity,
-          rate: item.rate,
-          amount: item.amount,
-          gst_rate: item.gstRate,
-          hsn_code: item.hsnCode || null
-        }));
+      if (items && items.length > 0) {
+        // First log and validate all items to ensure they're properly formed
+        console.log(`Processing ${items.length} invoice items`);
+        
+        // Transform items to snake_case for Supabase and validate data
+        const supabaseItems = items.map((item, index) => {
+          // Ensure numeric values are valid numbers and convert strings to numbers if needed
+          const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
+          const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : item.rate;
+          const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
+          const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : item.gstRate;
+
+          // Verify values are actually numbers
+          if (isNaN(quantity) || isNaN(rate) || isNaN(amount)) {
+            console.error(`Item ${index} has invalid numeric values:`, { 
+              quantity, rate, amount, description: item.description 
+            });
+          }
+          
+          // Return properly formatted item
+          return {
+            invoice_id: invoiceData.id,
+            product_id: item.productId || null,
+            description: item.description,
+            unit: item.unit || 'Piece',
+            quantity: isNaN(quantity) ? 1 : quantity,
+            rate: isNaN(rate) ? 1 : rate,
+            amount: isNaN(amount) ? quantity * rate : amount,
+            gst_rate: isNaN(gstRate) ? 0 : gstRate,
+            hsn_code: item.hsnCode || null
+          };
+        });
         
         console.log("Saving invoice items to Supabase:", supabaseItems);
         
-        // Insert all items
-        const { error: itemsError } = await supabase
-          .from('invoice_items')
-          .insert(supabaseItems);
-          
-        if (itemsError) {
-          console.error("Supabase invoice items insert error:", itemsError);
+        try {
+          // Insert all items
+          const { error: itemsError } = await supabase
+            .from('invoice_items')
+            .insert(supabaseItems);
+            
+          if (itemsError) {
+            console.error("Supabase invoice items insert error:", itemsError);
+            // Roll back invoice if items fail
+            await supabase.from('invoices').delete().eq('id', invoiceData.id);
+            throw itemsError;
+          }
+        } catch (itemInsertError) {
+          console.error("Exception during invoice items insert:", itemInsertError);
           // Roll back invoice if items fail
           await supabase.from('invoices').delete().eq('id', invoiceData.id);
-          throw itemsError;
+          throw itemInsertError;
         }
+      } else {
+        console.log("No invoice items to save");
       }
       
       // Transform back to camelCase
@@ -1295,47 +1332,75 @@ export class SupabaseStorage implements IStorage {
         console.log("Reset invoice_items sequence successfully");
       } catch (seqError) {
         console.error("Failed to reset invoice_items sequence:", seqError);
+        
+        // Try alternative method if the RPC fails
+        try {
+          const { resetSequences } = require('./utils/reset-sequences');
+          await resetSequences();
+        } catch (utilError) {
+          console.error("Failed to reset sequences using utility function:", utilError);
+        }
       }
       
-      // Transform to snake_case for Supabase
+      // Ensure numeric values are valid numbers
+      const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
+      const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : item.rate;
+      const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
+      const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : item.gstRate;
+      
+      // Verify values are actually numbers
+      if (isNaN(quantity) || isNaN(rate) || isNaN(amount)) {
+        console.error("Invalid numeric values in invoice item:", { 
+          quantity, rate, amount, description: item.description 
+        });
+      }
+      
+      // Transform to snake_case for Supabase with validation
       // Don't include ID to let Supabase auto-generate it
       const supabaseItem = {
         invoice_id: item.invoiceId,
-        product_id: item.productId,
+        product_id: item.productId || null,
         description: item.description,
-        quantity: item.quantity,
-        rate: item.rate,
-        amount: item.amount,
-        gst_rate: item.gstRate,
+        unit: item.unit || 'Piece',
+        quantity: isNaN(quantity) ? 1 : quantity, // Default to 1 if invalid
+        rate: isNaN(rate) ? 1 : rate, // Default to 1 if invalid
+        amount: isNaN(amount) ? (isNaN(quantity) ? 1 : quantity) * (isNaN(rate) ? 1 : rate) : amount,
+        gst_rate: isNaN(gstRate) ? 0 : gstRate,
         hsn_code: item.hsnCode || null
       };
       
       console.log("Adding invoice item:", supabaseItem);
       
-      // Insert using Supabase
-      const { data, error } = await supabase
-        .from('invoice_items')
-        .insert(supabaseItem)
-        .select()
-        .single();
+      try {
+        // Insert using Supabase
+        const { data, error } = await supabase
+          .from('invoice_items')
+          .insert(supabaseItem)
+          .select()
+          .single();
+          
+        if (error) {
+          console.error("Supabase invoice item insert error:", error);
+          throw error;
+        }
         
-      if (error) {
-        console.error("Supabase invoice item insert error:", error);
-        throw error;
+        // Transform back to camelCase
+        return {
+          id: data.id,
+          invoiceId: data.invoice_id,
+          productId: data.product_id,
+          description: data.description,
+          unit: data.unit || 'Piece',
+          quantity: data.quantity,
+          rate: data.rate,
+          amount: data.amount,
+          gstRate: data.gst_rate,
+          hsnCode: data.hsn_code || null
+        };
+      } catch (insertError) {
+        console.error("Exception during invoice item insert:", insertError);
+        throw insertError;
       }
-      
-      // Transform back to camelCase
-      return {
-        id: data.id,
-        invoiceId: data.invoice_id,
-        productId: data.product_id,
-        description: data.description,
-        quantity: data.quantity,
-        rate: data.rate,
-        amount: data.amount,
-        gstRate: data.gst_rate,
-        hsnCode: data.hsn_code || null
-      };
     } catch (error) {
       console.error("Error adding invoice item:", error);
       throw error;
