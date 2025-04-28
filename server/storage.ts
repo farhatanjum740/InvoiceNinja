@@ -948,15 +948,18 @@ export class SupabaseStorage implements IStorage {
         userId: i.user_id,
         customerId: i.customer_id,
         invoiceNumber: i.invoice_number,
-        date: i.date,
+        invoiceDate: i.invoice_date,
         dueDate: i.due_date,
         notes: i.notes || null,
         status: i.status,
         subtotal: i.subtotal,
-        tax: i.tax,
-        discount: i.discount,
+        cgst: i.cgst || '0.00',
+        sgst: i.sgst || '0.00',
+        igst: i.igst || '0.00',
         total: i.total,
-        termsAndConditions: i.terms_and_conditions || null
+        termsAndConditions: i.terms_and_conditions || null,
+        templateId: i.template_id || 'standard',
+        colorTheme: i.color_theme || 'blue'
       }));
     } catch (error) {
       console.error("Error fetching invoices:", error);

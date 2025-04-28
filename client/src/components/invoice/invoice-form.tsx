@@ -302,9 +302,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         colorTheme: selectedColor,
         // Convert all numeric values to strings for the database
         subtotal: subtotal.toString(),
-        cgst: gstTotals.cgst.toString(),
-        sgst: gstTotals.sgst.toString(), 
-        igst: gstTotals.igst.toString(),
+        cgst: gstTotals.cgst !== null && gstTotals.cgst !== undefined ? gstTotals.cgst.toString() : '0.00',
+        sgst: gstTotals.sgst !== null && gstTotals.sgst !== undefined ? gstTotals.sgst.toString() : '0.00', 
+        igst: gstTotals.igst !== null && gstTotals.igst !== undefined ? gstTotals.igst.toString() : '0.00',
         total: total.toString()
       },
       items: invoiceItems.map(item => ({
@@ -312,7 +312,8 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         // Convert the numeric values to strings for each item
         quantity: item.quantity.toString(),
         rate: item.rate.toString(),
-        amount: item.amount.toString()
+        amount: item.amount.toString(),
+        hsnCode: item.hsnCode || null
       }))
     };
 
