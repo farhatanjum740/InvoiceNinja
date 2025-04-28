@@ -494,11 +494,25 @@ export default function InvoicesPage() {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete invoice');
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to delete invoice');
+        } catch (e) {
+          throw new Error('Failed to delete invoice');
+        }
       }
       
-      return await response.json();
+      // For 204 No Content responses, just return an empty object
+      if (response.status === 204) {
+        return {};
+      }
+      
+      try {
+        return await response.json();
+      } catch (e) {
+        // If there's no JSON response but the request was successful, return an empty object
+        return {};
+      }
     },
     onSuccess: () => {
       toast({
