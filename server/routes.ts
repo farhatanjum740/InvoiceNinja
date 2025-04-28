@@ -77,7 +77,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/company/:id", async (req: Request, res: Response) => {
+  // Support both PATCH and PUT methods for company updates
+  const handleCompanyUpdate = async (req: Request, res: Response) => {
     if (!req.user?.id) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -99,7 +100,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error updating company:", error);
       return res.status(500).json({ error: "Server error" });
     }
-  });
+  };
+  
+  app.patch("/api/company/:id", handleCompanyUpdate);
+  app.put("/api/company/:id", handleCompanyUpdate);
 
   // Customer endpoints
   app.get("/api/customers", async (req: Request, res: Response) => {
