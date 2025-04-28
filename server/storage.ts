@@ -250,57 +250,115 @@ export class SupabaseStorage implements IStorage {
 
   async createCompany(company: InsertCompany): Promise<Company> {
     try {
+      // First get the maximum company ID to ensure we never reuse IDs
+      const { data: maxIdData, error: maxIdError } = await supabase
+        .from('companies')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1);
+      
+      if (maxIdError) {
+        console.error("Error fetching max company ID:", maxIdError);
+        // Continue anyway, we'll handle potential conflicts below
+      }
+      
+      // Use a high starting ID if there are no companies yet, or increment the highest existing ID
+      const nextId = maxIdData && maxIdData.length > 0 ? maxIdData[0].id + 1 : 1000;
+      console.log(`Using next company ID: ${nextId}`);
+      
       // Convert from camelCase to snake_case for Supabase
       const supabaseCompany = {
+        id: nextId, // Explicitly set ID to avoid conflicts
         user_id: company.userId,
         name: company.name,
         address: company.address,
         city: company.city,
         state: company.state,
         pincode: company.pincode,
-        gstin: company.gstin,
-        email: company.email,
-        phone: company.phone,
-        bank_name: company.bankName,
-        bank_account_no: company.bankAccountNo,
-        bank_ifsc: company.bankIfsc,
-        logo_url: company.logoUrl,
-        pan_no: company.panNo,
-        iec_code: company.iecCode,
-        ad_code: company.adCode
+        gstin: company.gstin || null,
+        email: company.email || null,
+        phone: company.phone || null,
+        bank_name: company.bankName || null,
+        bank_account_no: company.bankAccountNo || null,
+        bank_ifsc: company.bankIfsc || null,
+        logo_url: company.logoUrl || null,
+        pan_no: company.panNo || null,
+        iec_code: company.iecCode || null,
+        ad_code: company.adCode || null
       };
       
-      const { data, error } = await supabase
-        .from('companies')
-        .insert(supabaseCompany)
-        .select()
-        .single();
-        
-      if (error) {
-        console.error("Supabase company insert error:", error);
-        throw error;
+      // Insert with retry logic in case of conflicts
+      let retryCount = 0;
+      const maxRetries = 3;
+      let lastError = null;
+      
+      while (retryCount <= maxRetries) {
+        try {
+          // Increment ID if we're retrying
+          if (retryCount > 0) {
+            supabaseCompany.id = nextId + retryCount;
+            console.log(`Retrying with company ID: ${supabaseCompany.id}`);
+          }
+          
+          const { data, error } = await supabase
+            .from('companies')
+            .insert(supabaseCompany)
+            .select()
+            .single();
+            
+          if (error) {
+            if (error.code === '23505' && error.message.includes('companies_pkey')) {
+              // Primary key violation, we'll retry with a different ID
+              console.log(`ID ${supabaseCompany.id} already exists, retrying...`);
+              lastError = error;
+              retryCount++;
+              continue;
+            } else {
+              // Different error
+              console.error("Supabase company insert error:", error);
+              throw error;
+            }
+          }
+          
+          // Transform back to camelCase
+          return {
+            id: data.id,
+            userId: data.user_id,
+            name: data.name,
+            address: data.address,
+            city: data.city,
+            state: data.state,
+            pincode: data.pincode,
+            gstin: data.gstin,
+            email: data.email,
+            phone: data.phone,
+            bankName: data.bank_name,
+            bankAccountNo: data.bank_account_no,
+            bankIfsc: data.bank_ifsc,
+            logoUrl: data.logo_url,
+            panNo: data.pan_no,
+            iecCode: data.iec_code,
+            adCode: data.ad_code
+          };
+        } catch (error: any) {
+          // Only retry for primary key violations
+          if (error.code === '23505' && error.message.includes('companies_pkey') && retryCount < maxRetries) {
+            lastError = error;
+            retryCount++;
+            continue;
+          }
+          throw error;
+        }
       }
       
-      // Transform back to camelCase
-      return {
-        id: data.id,
-        userId: data.user_id,
-        name: data.name,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
-        gstin: data.gstin,
-        email: data.email,
-        phone: data.phone,
-        bankName: data.bank_name,
-        bankAccountNo: data.bank_account_no,
-        bankIfsc: data.bank_ifsc,
-        logoUrl: data.logo_url,
-        panNo: data.pan_no,
-        iecCode: data.iec_code,
-        adCode: data.ad_code
-      };
+      // If we're here, we've exceeded our retry limit
+      if (lastError) {
+        throw lastError;
+      }
+      
+      // This should never happen
+      throw new Error("Failed to insert company after multiple retries");
+      
     } catch (error) {
       console.error("Error in createCompany:", error);
       throw error;

@@ -35,27 +35,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
-      const company = await storage.getCompanyByUserId(req.user.id);
+      let company = await storage.getCompanyByUserId(req.user.id);
       
       if (!company) {
-        // Auto-create a company profile with default values
-        const newCompany = await storage.createCompany({
-          userId: req.user.id,
-          name: "My Company",
-          email: req.user.email || "",
-          phone: "",
-          address: "",
-          city: "",
-          state: "",
-          pincode: "",
-          gstin: "",
-          logo: "",
-          bankName: "",
-          accountNumber: "",
-          ifscCode: ""
-        });
-        
-        return res.json(newCompany);
+        try {
+          // Auto-create a company profile with default values
+          const newCompany = await storage.createCompany({
+            userId: req.user.id,
+            name: "My Company",
+            email: req.user.email || "",
+            phone: "",
+            address: "",
+            city: "",
+            state: "",
+            pincode: "",
+            gstin: "",
+            logo: "",
+            bankName: "",
+            accountNumber: "",
+            ifscCode: ""
+          });
+          
+          return res.json(newCompany);
+        } catch (createError) {
+          console.error("Error creating default company:", createError);
+          
+          // Even if we failed to create, try to fetch again in case it was created by another request
+          company = await storage.getCompanyByUserId(req.user.id);
+          if (company) {
+            return res.json(company);
+          }
+          
+          throw createError; // Re-throw if we still couldn't find a company
+        }
       }
       
       return res.json(company);
