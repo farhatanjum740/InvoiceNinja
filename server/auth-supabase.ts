@@ -9,6 +9,11 @@ import session from "express-session";
 declare module "express-session" {
   interface SessionData {
     userId: number;
+    supabaseSession?: {
+      access_token: string;
+      refresh_token: string;
+      expires_at?: number;
+    };
   }
 }
 
@@ -46,7 +51,7 @@ export async function setupAuth(app: Express) {
     store: storage.sessionStore
   }));
   
-  // Add authentication middleware to check session
+  // Add authentication middleware to check session and Supabase token
   app.use(async (req: Request, res: Response, next: NextFunction) => {
     // Skip authentication for public routes and non-API requests (frontend routes)
     if (
@@ -66,6 +71,27 @@ export async function setupAuth(app: Express) {
       try {
         const user = await storage.getUser(req.session.userId);
         if (user) {
+          // If we have a Supabase session stored, verify it's still valid
+          if (req.session.supabaseSession) {
+            try {
+              // Use the stored session to validate with Supabase
+              const { data, error } = await supabase.auth.setSession({
+                access_token: req.session.supabaseSession.access_token,
+                refresh_token: req.session.supabaseSession.refresh_token,
+              });
+              
+              if (error || !data.session) {
+                console.warn("Supabase session expired or invalid:", error);
+                // Session is invalid, clear it from our session
+                delete req.session.supabaseSession;
+                // But still allow access if our session is valid
+              }
+            } catch (supabaseError) {
+              console.error("Supabase session check error:", supabaseError);
+              // Continue with our own session as fallback
+            }
+          }
+          
           // Attach user to request object
           req.user = user;
           return next();
@@ -79,20 +105,20 @@ export async function setupAuth(app: Express) {
     return res.status(401).json({ message: "Not authenticated" });
   });
   
-  // Register endpoint
+  // Register endpoint - using Supabase primarily
   app.post("/api/register", async (req: Request, res: Response) => {
     try {
       // Validate request body
       const validatedData = registerSchema.parse(req.body);
       
       try {
-        // Check if username is already taken
+        // Check if username is already taken in our PostgreSQL database
         const existingUser = await storage.getUserByUsername(validatedData.username);
         if (existingUser) {
           return res.status(400).json({ message: "Username already taken" });
         }
         
-        // Check if email is already registered
+        // Check if email is already registered in our PostgreSQL database
         const existingEmail = await storage.getUserByEmail(validatedData.email);
         if (existingEmail) {
           return res.status(400).json({ message: "Email already registered" });
@@ -103,25 +129,29 @@ export async function setupAuth(app: Express) {
         // This is to handle case where the tables might not exist yet on first run
       }
       
-      // Create user in Supabase (if integration is available)
-      try {
-        const { data: authData, error } = await supabase.auth.signUp({
-          email: validatedData.email,
-          password: validatedData.password,
-          options: {
-            data: {
-              username: validatedData.username,
-              name: validatedData.name
-            }
+      // Create user in Supabase first
+      const { data: authData, error: supabaseError } = await supabase.auth.signUp({
+        email: validatedData.email,
+        password: validatedData.password,
+        options: {
+          data: {
+            username: validatedData.username,
+            name: validatedData.name || ""
           }
-        });
-        
-        if (error) {
-          console.error("Supabase auth error:", error);
-          return res.status(400).json({ message: error.message });
         }
-        
-        // Create user in our database
+      });
+      
+      if (supabaseError) {
+        console.error("Supabase auth error:", supabaseError);
+        return res.status(400).json({ message: supabaseError.message });
+      }
+      
+      if (!authData.user) {
+        return res.status(400).json({ message: "Failed to create user account" });
+      }
+      
+      // Now create the user in PostgreSQL for app-specific data
+      try {
         const user = await storage.createUser({
           username: validatedData.username,
           password: validatedData.password, // This will be hashed before saving
@@ -129,29 +159,29 @@ export async function setupAuth(app: Express) {
           name: validatedData.name || ""
         });
         
-        // Set session
+        // Set session with user ID
         req.session.userId = user.id;
+        
+        // Store Supabase session in express session
+        if (authData.session) {
+          req.session.supabaseSession = authData.session;
+        }
         
         // Return user data (excluding password)
         const { password, ...userData } = user;
         return res.status(201).json(userData);
-      } catch (supabaseError) {
-        console.error("Supabase registration error:", supabaseError);
+      } catch (dbError) {
+        console.error("Database error during user creation:", dbError);
         
-        // Fallback to local database only if Supabase is not available
-        const user = await storage.createUser({
-          username: validatedData.username,
-          password: validatedData.password,
-          email: validatedData.email,
-          name: validatedData.name || ""
-        });
+        // If PostgreSQL fails, try to delete the Supabase user
+        try {
+          // We can't delete users with regular API key, but we can mark for future cleanup
+          console.warn("User created in Supabase but failed in PostgreSQL. Will need manual cleanup.");
+        } catch (cleanupError) {
+          console.error("Error during cleanup:", cleanupError);
+        }
         
-        // Set session
-        req.session.userId = user.id;
-        
-        // Return user data (excluding password)
-        const { password, ...userData } = user;
-        return res.status(201).json(userData);
+        return res.status(500).json({ message: "Failed to complete registration" });
       }
     } catch (error) {
       console.error("Registration error:", error);
@@ -165,41 +195,38 @@ export async function setupAuth(app: Express) {
     }
   });
   
-  // Login endpoint
+  // Login endpoint - using Supabase exclusively
   app.post("/api/login", async (req: Request, res: Response) => {
     try {
       // Validate request body
       const validatedData = loginSchema.parse(req.body);
       
-      // Find user by username
+      // First, try to find user by username to get their email
       const user = await storage.getUserByUsername(validatedData.username);
       if (!user) {
         return res.status(400).json({ message: "Invalid username or password" });
       }
       
-      // Check password
-      const isPasswordValid = validatedData.password === user.password; // In real app, use bcrypt.compare
+      // Sign in with Supabase using email
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: validatedData.password
+      });
       
-      if (!isPasswordValid) {
+      if (authError) {
+        console.error("Supabase login error:", authError);
         return res.status(400).json({ message: "Invalid username or password" });
       }
       
-      // Try to sign in with Supabase using email
-      try {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: user.email,
-          password: validatedData.password
-        });
-        
-        if (error) {
-          console.error("Supabase login error:", error);
-        }
-      } catch (supabaseError) {
-        console.error("Supabase login error:", supabaseError);
+      if (!authData.user) {
+        return res.status(400).json({ message: "Authentication failed" });
       }
       
-      // Set session
+      // Set session with user ID from PostgreSQL/Drizzle (for API calls)
       req.session.userId = user.id;
+      
+      // Also store Supabase session (for future direct Supabase client calls)
+      req.session.supabaseSession = authData.session;
       
       // Return user data (excluding password)
       const { password, ...userData } = user;
