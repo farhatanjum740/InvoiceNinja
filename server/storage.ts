@@ -235,12 +235,9 @@ export class SupabaseStorage implements IStorage {
         email: data.email,
         phone: data.phone,
         bankName: data.bank_name,
-        bankAccountNo: data.bank_account_no,
-        bankIfsc: data.bank_ifsc,
-        logoUrl: data.logo_url,
-        panNo: data.pan_no,
-        iecCode: data.iec_code,
-        adCode: data.ad_code
+        accountNumber: data.account_number,
+        ifscCode: data.ifsc_code,
+        logo: data.logo
       };
     } catch (error) {
       console.error("Error in getCompanyByUserId:", error);
@@ -267,6 +264,7 @@ export class SupabaseStorage implements IStorage {
       console.log(`Using next company ID: ${nextId}`);
       
       // Convert from camelCase to snake_case for Supabase
+      // Only include fields that exist in the database schema
       const supabaseCompany = {
         id: nextId, // Explicitly set ID to avoid conflicts
         user_id: company.userId,
@@ -279,12 +277,9 @@ export class SupabaseStorage implements IStorage {
         email: company.email || null,
         phone: company.phone || null,
         bank_name: company.bankName || null,
-        bank_account_no: company.bankAccountNo || null,
-        bank_ifsc: company.bankIfsc || null,
-        logo_url: company.logoUrl || null,
-        pan_no: company.panNo || null,
-        iec_code: company.iecCode || null,
-        ad_code: company.adCode || null
+        account_number: company.accountNumber || null, 
+        ifsc_code: company.ifscCode || null,
+        logo: company.logo || null
       };
       
       // Insert with retry logic in case of conflicts
@@ -333,12 +328,9 @@ export class SupabaseStorage implements IStorage {
             email: data.email,
             phone: data.phone,
             bankName: data.bank_name,
-            bankAccountNo: data.bank_account_no,
-            bankIfsc: data.bank_ifsc,
-            logoUrl: data.logo_url,
-            panNo: data.pan_no,
-            iecCode: data.iec_code,
-            adCode: data.ad_code
+            accountNumber: data.account_number,
+            ifscCode: data.ifsc_code,
+            logo: data.logo
           };
         } catch (error: any) {
           // Only retry for primary key violations
@@ -368,6 +360,7 @@ export class SupabaseStorage implements IStorage {
   async updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company | undefined> {
     try {
       // Convert partial company from camelCase to snake_case
+      // Only include fields that exist in the database schema
       const supabaseCompany: Record<string, any> = {};
       
       if ('userId' in company) supabaseCompany.user_id = company.userId;
@@ -380,12 +373,9 @@ export class SupabaseStorage implements IStorage {
       if ('email' in company) supabaseCompany.email = company.email;
       if ('phone' in company) supabaseCompany.phone = company.phone;
       if ('bankName' in company) supabaseCompany.bank_name = company.bankName;
-      if ('bankAccountNo' in company) supabaseCompany.bank_account_no = company.bankAccountNo;
-      if ('bankIfsc' in company) supabaseCompany.bank_ifsc = company.bankIfsc;
-      if ('logoUrl' in company) supabaseCompany.logo_url = company.logoUrl;
-      if ('panNo' in company) supabaseCompany.pan_no = company.panNo;
-      if ('iecCode' in company) supabaseCompany.iec_code = company.iecCode;
-      if ('adCode' in company) supabaseCompany.ad_code = company.adCode;
+      if ('accountNumber' in company) supabaseCompany.account_number = company.accountNumber;
+      if ('ifscCode' in company) supabaseCompany.ifsc_code = company.ifscCode;
+      if ('logo' in company) supabaseCompany.logo = company.logo;
       
       const { data, error } = await supabase
         .from('companies')
@@ -412,12 +402,9 @@ export class SupabaseStorage implements IStorage {
         email: data.email,
         phone: data.phone,
         bankName: data.bank_name,
-        bankAccountNo: data.bank_account_no,
-        bankIfsc: data.bank_ifsc,
-        logoUrl: data.logo_url,
-        panNo: data.pan_no,
-        iecCode: data.iec_code,
-        adCode: data.ad_code
+        accountNumber: data.account_number,
+        ifscCode: data.ifsc_code,
+        logo: data.logo
       };
     } catch (error) {
       console.error("Error in updateCompany:", error);
