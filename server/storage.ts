@@ -562,7 +562,7 @@ export class SupabaseStorage implements IStorage {
         return [];
       }
       
-      // Transform Supabase snake_case to camelCase
+      // Transform Supabase snake_case to camelCase and handle field name differences
       return data.map(p => ({
         id: p.id,
         userId: p.user_id,
@@ -570,8 +570,11 @@ export class SupabaseStorage implements IStorage {
         description: p.description,
         hsnCode: p.hsn_code,
         unit: p.unit,
-        price: p.price,
-        gstRate: p.gst_rate,
+        // Use rate instead of price to match schema.ts definition
+        rate: p.price || p.rate || "0.00", // Try both field names with fallback
+        gstRate: p.gst_rate || 0,
+        // Include these but they're not in schema
+        price: p.price || p.rate || "0.00", // Backward compatibility
         imageUrl: p.image_url
       }));
     } catch (error) {
