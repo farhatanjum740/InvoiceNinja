@@ -1,16 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
-  throw new Error(
-    "SUPABASE_URL and SUPABASE_KEY must be set in environment variables.",
-  );
+// Get Supabase URL and service role key from environment variables
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || '';
+
+// Validate configuration
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn('Supabase URL or Service Key is missing. Check your environment variables.');
 }
 
-// Create a Supabase client with the service key for server-side operations
+// Create Supabase client with service role for admin access
 export const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY
+  supabaseUrl,
+  supabaseServiceKey,
+  {
+    auth: {
+      autoRefreshToken: false, // We're using a service key which doesn't expire
+      persistSession: false    // We don't need to persist session as the server restarts
+    }
+  }
 );
 
-// Export types from Supabase
+// Export the type for use in other files
 export type SupabaseClient = typeof supabase;

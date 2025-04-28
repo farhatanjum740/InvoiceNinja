@@ -1,613 +1,507 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-// Use Supabase auth instead of the original auth
-import { setupAuth } from "./auth-supabase";
+import type { Express, Request, Response, NextFunction } from "express";
+import { Server } from "http";
 import { z } from "zod";
-import { supabase } from "./supabase";
-import { insertCompanySchema, insertCustomerSchema, insertProductSchema, insertInvoiceSchema, insertInvoiceItemSchema } from "@shared/schema";
+import { storage } from "./storage";
+import { setupAuth } from "./auth-supabase";
 
+// Create and configure the HTTP server
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth routes
+  // Provide environment variables to the client
+  app.get("/api/env", (req, res) => {
+    res.json({
+      VITE_SUPABASE_URL: process.env.SUPABASE_URL,
+      VITE_SUPABASE_KEY: process.env.SUPABASE_KEY
+    });
+  });
+
+  // Check database connection status
+  app.get("/api/health", async (req, res) => {
+    try {
+      // Simple health check endpoint
+      res.json({ status: "ok", timestamp: new Date().toISOString() });
+    } catch (error) {
+      console.error("Health check failed:", error);
+      res.status(500).json({ status: "error", message: "Health check failed" });
+    }
+  });
+
+  // Setup authentication routes
   setupAuth(app);
-  
-  // Company routes
-  app.get("/api/company", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    let company = await storage.getCompanyByUserId(req.user!.id);
-    
-    // If company doesn't exist, create a default company profile
-    if (!company) {
-      // Create a default company with placeholder data
-      const defaultCompany = {
-        name: req.user!.name ? `${req.user!.name}'s Business` : "Your Business",
-        userId: req.user!.id,
-        email: req.user!.email || "",
-        phone: "",
-        address: "",
-        city: "",
-        state: "",
-        pincode: "",
-        country: "India",
-        gstin: "",
-        panNumber: "",
-        bankName: "",
-        accountNumber: "",
-        ifscCode: "",
-        logo: "",
-      };
-      
-      try {
-        company = await storage.createCompany(defaultCompany);
-        console.log("Created default company profile for user", req.user!.id);
-      } catch (error) {
-        console.error("Error creating default company profile:", error);
-        return res.status(500).json({ message: "Failed to create default company profile" });
-      }
+
+  // Company endpoints
+  app.get("/api/company", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
-    res.json(company);
+    try {
+      const company = await storage.getCompanyByUserId(req.user.id);
+      
+      if (!company) {
+        // Auto-create a company profile with default values
+        const newCompany = await storage.createCompany({
+          userId: req.user.id,
+          name: "My Company",
+          email: req.user.email || "",
+          phone: "",
+          address: "",
+          city: "",
+          state: "",
+          pincode: "",
+          gstin: "",
+          logo: "",
+          bankName: "",
+          accountNumber: "",
+          ifscCode: ""
+        });
+        
+        return res.json(newCompany);
+      }
+      
+      return res.json(company);
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
   });
-  
-  app.post("/api/company", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+
+  app.patch("/api/company/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
     
     try {
-      const companyData = insertCompanySchema.parse({
+      const companyId = parseInt(req.params.id);
+      
+      // First check if company belongs to user
+      const company = await storage.getCompanyByUserId(req.user.id);
+      
+      if (!company || company.id !== companyId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      const updatedCompany = await storage.updateCompany(companyId, req.body);
+      
+      return res.json(updatedCompany);
+    } catch (error) {
+      console.error("Error updating company:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Customer endpoints
+  app.get("/api/customers", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const customers = await storage.getCustomersByUserId(req.user.id);
+      return res.json(customers);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.post("/api/customers", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const newCustomer = await storage.createCustomer({
         ...req.body,
-        userId: req.user!.id
+        userId: req.user.id
       });
       
-      // Check if user already has a company
-      const existingCompany = await storage.getCompanyByUserId(req.user!.id);
-      if (existingCompany) {
-        return res.status(400).json({ message: "User already has a company" });
-      }
-      
-      const company = await storage.createCompany(companyData);
-      res.status(201).json(company);
+      return res.status(201).json(newCustomer);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error creating customer:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.put("/api/company/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid company ID" });
+
+  app.get("/api/customers/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
     try {
-      const companyData = insertCompanySchema.partial().parse(req.body);
+      const customerId = parseInt(req.params.id);
+      const customer = await storage.getCustomer(customerId);
       
-      // Check if company belongs to user
-      const existingCompany = await storage.getCompanyByUserId(req.user!.id);
-      if (!existingCompany || existingCompany.id !== id) {
-        return res.status(404).json({ message: "Company not found" });
+      if (!customer || customer.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
-      const updatedCompany = await storage.updateCompany(id, companyData);
-      if (!updatedCompany) {
-        return res.status(404).json({ message: "Company not found" });
-      }
-      
-      res.json(updatedCompany);
+      return res.json(customer);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error fetching customer:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  // Customer routes
-  app.get("/api/customers", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const customers = await storage.getCustomersByUserId(req.user!.id);
-    res.json(customers);
-  });
-  
-  app.get("/api/customers/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid customer ID" });
-    }
-    
-    const customer = await storage.getCustomer(id);
-    if (!customer || customer.userId !== req.user!.id) {
-      return res.status(404).json({ message: "Customer not found" });
-    }
-    
-    res.json(customer);
-  });
-  
-  app.post("/api/customers", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    try {
-      const customerData = insertCustomerSchema.parse({
-        ...req.body,
-        userId: req.user!.id
-      });
-      
-      const customer = await storage.createCustomer(customerData);
-      res.status(201).json(customer);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
-    }
-  });
-  
-  app.put("/api/customers/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid customer ID" });
+
+  app.patch("/api/customers/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
     try {
-      const customerData = insertCustomerSchema.partial().parse(req.body);
+      const customerId = parseInt(req.params.id);
       
       // Check if customer belongs to user
-      const existingCustomer = await storage.getCustomer(id);
-      if (!existingCustomer || existingCustomer.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Customer not found" });
+      const customer = await storage.getCustomer(customerId);
+      
+      if (!customer || customer.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
-      const updatedCustomer = await storage.updateCustomer(id, customerData);
-      if (!updatedCustomer) {
-        return res.status(404).json({ message: "Customer not found" });
-      }
+      const updatedCustomer = await storage.updateCustomer(customerId, req.body);
       
-      res.json(updatedCustomer);
+      return res.json(updatedCustomer);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error updating customer:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.delete("/api/customers/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid customer ID" });
+
+  app.delete("/api/customers/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
-    
-    // Check if customer belongs to user
-    const existingCustomer = await storage.getCustomer(id);
-    if (!existingCustomer || existingCustomer.userId !== req.user!.id) {
-      return res.status(404).json({ message: "Customer not found" });
-    }
-    
-    const deleted = await storage.deleteCustomer(id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Customer not found" });
-    }
-    
-    res.status(204).end();
-  });
-  
-  // Product routes
-  app.get("/api/products", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const products = await storage.getProductsByUserId(req.user!.id);
-    res.json(products);
-  });
-  
-  app.get("/api/products/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid product ID" });
-    }
-    
-    const product = await storage.getProduct(id);
-    if (!product || product.userId !== req.user!.id) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-    
-    res.json(product);
-  });
-  
-  app.post("/api/products", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     
     try {
-      const productData = insertProductSchema.parse({
+      const customerId = parseInt(req.params.id);
+      
+      // Check if customer belongs to user
+      const customer = await storage.getCustomer(customerId);
+      
+      if (!customer || customer.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      await storage.deleteCustomer(customerId);
+      
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Product endpoints
+  app.get("/api/products", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const products = await storage.getProductsByUserId(req.user.id);
+      return res.json(products);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.post("/api/products", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const newProduct = await storage.createProduct({
         ...req.body,
-        userId: req.user!.id
+        userId: req.user.id
       });
       
-      const product = await storage.createProduct(productData);
-      res.status(201).json(product);
+      return res.status(201).json(newProduct);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error creating product:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.put("/api/products/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid product ID" });
+
+  app.get("/api/products/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
     try {
-      const productData = insertProductSchema.partial().parse(req.body);
+      const productId = parseInt(req.params.id);
+      const product = await storage.getProduct(productId);
+      
+      if (!product || product.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      return res.json(product);
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.patch("/api/products/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const productId = parseInt(req.params.id);
       
       // Check if product belongs to user
-      const existingProduct = await storage.getProduct(id);
-      if (!existingProduct || existingProduct.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Product not found" });
+      const product = await storage.getProduct(productId);
+      
+      if (!product || product.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
-      const updatedProduct = await storage.updateProduct(id, productData);
-      if (!updatedProduct) {
-        return res.status(404).json({ message: "Product not found" });
-      }
+      const updatedProduct = await storage.updateProduct(productId, req.body);
       
-      res.json(updatedProduct);
+      return res.json(updatedProduct);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error updating product:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.delete("/api/products/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid product ID" });
-    }
-    
-    // Check if product belongs to user
-    const existingProduct = await storage.getProduct(id);
-    if (!existingProduct || existingProduct.userId !== req.user!.id) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-    
-    const deleted = await storage.deleteProduct(id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-    
-    res.status(204).end();
-  });
-  
-  // Invoice routes
-  app.get("/api/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      console.log("User not authenticated when getting invoices");
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    console.log(`Fetching invoices for user ${req.user!.id}`);
-    const invoices = await storage.getInvoicesByUserId(req.user!.id);
-    console.log(`Returning ${invoices.length} invoices to client`);
-    res.json(invoices);
-  });
-  
-  app.get("/api/invoices/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid invoice ID" });
+
+  app.delete("/api/products/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
     try {
-      const { invoice, items } = await storage.getInvoiceWithItems(id);
+      const productId = parseInt(req.params.id);
       
-      if (invoice.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Invoice not found" });
+      // Check if product belongs to user
+      const product = await storage.getProduct(productId);
+      
+      if (!product || product.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
-      res.json({ invoice, items });
+      await storage.deleteProduct(productId);
+      
+      return res.status(204).send();
     } catch (error) {
-      return res.status(404).json({ message: "Invoice not found" });
+      console.error("Error deleting product:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.post("/api/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+
+  // Invoice endpoints
+  app.get("/api/invoices", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
     
     try {
-      console.log("Received invoice request body:", req.body);
-      const { invoice: invoiceData, items: itemsData } = req.body;
+      const invoices = await storage.getInvoicesByUserId(req.user.id);
+      return res.json(invoices);
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.post("/api/invoices", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const { invoice, items } = req.body;
       
-      console.log("Extracted invoice data:", invoiceData);
-      console.log("Extracted items data:", itemsData);
-      
-      // Validate invoice data and ensure no undefined values
-      // Provide defaults for optional fields
-      // Convert invoiceDate and dueDate from string to Date objects if they're strings
-      const invoiceWithDefaults = {
-        ...invoiceData,
-        userId: req.user!.id,
-        status: invoiceData.status || "pending",
-        invoiceDate: typeof invoiceData.invoiceDate === 'string' 
-          ? new Date(invoiceData.invoiceDate) 
-          : (invoiceData.invoiceDate || new Date()),
-        dueDate: invoiceData.dueDate 
-          ? (typeof invoiceData.dueDate === 'string' ? new Date(invoiceData.dueDate) : invoiceData.dueDate) 
-          : null,
-        notes: invoiceData.notes || null,
-        cgst: invoiceData.cgst || null,
-        sgst: invoiceData.sgst || null,
-        igst: invoiceData.igst || null,
-        termsAndConditions: invoiceData.termsAndConditions || null
-      };
-      
-      console.log("Invoice with defaults:", invoiceWithDefaults);
-      const validatedInvoice = insertInvoiceSchema.parse(invoiceWithDefaults);
-      
-      console.log("Validated invoice data:", validatedInvoice);
-      
-      // Validate invoice items
-      const validatedItems = itemsData.map((item: any) => 
-        insertInvoiceItemSchema.omit({ invoiceId: true }).parse(item)
+      const newInvoice = await storage.createInvoice(
+        {
+          ...invoice,
+          userId: req.user.id
+        },
+        items || []
       );
       
-      console.log("Validated items data:", validatedItems);
-      
-      // Check if customer belongs to user
-      const customer = await storage.getCustomer(validatedInvoice.customerId);
-      if (!customer || customer.userId !== req.user!.id) {
-        console.log("Customer not found or doesn't belong to user:", validatedInvoice.customerId);
-        return res.status(404).json({ message: "Customer not found" });
-      }
-      
-      console.log("Customer verification passed, creating invoice");
-      
-      // Create invoice with items
-      const invoice = await storage.createInvoice(validatedInvoice, validatedItems);
-      
-      console.log("Invoice created:", invoice);
-      
-      // Get complete invoice with items
-      const completeInvoice = await storage.getInvoiceWithItems(invoice.id);
-      
-      console.log("Complete invoice with items:", completeInvoice);
-      
-      res.status(201).json(completeInvoice);
+      return res.status(201).json(newInvoice);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error creating invoice:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.put("/api/invoices/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid invoice ID" });
+
+  app.get("/api/invoices/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
     try {
-      const { invoice: invoiceData } = req.body;
+      const invoiceId = parseInt(req.params.id);
+      const invoice = await storage.getInvoice(invoiceId);
       
-      // Validate invoice data
-      const validatedInvoice = insertInvoiceSchema.partial().parse(invoiceData);
+      if (!invoice || invoice.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      const invoiceWithItems = await storage.getInvoiceWithItems(invoiceId);
+      
+      return res.json(invoiceWithItems);
+    } catch (error) {
+      console.error("Error fetching invoice:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.patch("/api/invoices/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const invoiceId = parseInt(req.params.id);
       
       // Check if invoice belongs to user
-      const existingInvoice = await storage.getInvoice(id);
-      if (!existingInvoice || existingInvoice.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Invoice not found" });
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
-      // If customer ID is changing, check if new customer belongs to user
-      if (validatedInvoice.customerId && validatedInvoice.customerId !== existingInvoice.customerId) {
-        const customer = await storage.getCustomer(validatedInvoice.customerId);
-        if (!customer || customer.userId !== req.user!.id) {
-          return res.status(404).json({ message: "Customer not found" });
-        }
-      }
+      const updatedInvoice = await storage.updateInvoice(invoiceId, req.body);
       
-      // Update invoice
-      const updatedInvoice = await storage.updateInvoice(id, validatedInvoice);
-      if (!updatedInvoice) {
-        return res.status(404).json({ message: "Invoice not found" });
-      }
-      
-      res.json(updatedInvoice);
+      return res.json(updatedInvoice);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error updating invoice:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.delete("/api/invoices/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid invoice ID" });
-    }
-    
-    // Check if invoice belongs to user
-    const existingInvoice = await storage.getInvoice(id);
-    if (!existingInvoice || existingInvoice.userId !== req.user!.id) {
-      return res.status(404).json({ message: "Invoice not found" });
-    }
-    
-    const deleted = await storage.deleteInvoice(id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Invoice not found" });
-    }
-    
-    res.status(204).end();
-  });
-  
-  // Invoice Items routes
-  app.post("/api/invoices/:id/items", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const invoiceId = parseInt(req.params.id);
-    if (isNaN(invoiceId)) {
-      return res.status(400).json({ message: "Invalid invoice ID" });
+
+  app.delete("/api/invoices/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
     try {
+      const invoiceId = parseInt(req.params.id);
+      
       // Check if invoice belongs to user
-      const existingInvoice = await storage.getInvoice(invoiceId);
-      if (!existingInvoice || existingInvoice.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Invoice not found" });
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
-      // Validate item data
-      const itemData = insertInvoiceItemSchema.parse({
-        ...req.body,
-        invoiceId
-      });
+      await storage.deleteInvoice(invoiceId);
       
-      // Add item to invoice
-      const item = await storage.addInvoiceItem(itemData);
-      
-      res.status(201).json(item);
+      return res.status(204).send();
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error deleting invoice:", error);
+      return res.status(500).json({ error: "Server error" });
     }
   });
-  
-  app.put("/api/invoice-items/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid item ID" });
+
+  // Invoice items endpoints
+  app.post("/api/invoice-items", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
     
     try {
-      // Validate item data
-      const itemData = insertInvoiceItemSchema.partial().parse(req.body);
+      // Check if the invoice belongs to the user
+      const invoice = await storage.getInvoice(req.body.invoiceId);
       
-      // Get the item from invoice items
-      const items = await storage.getInvoiceItems(0); // Get all items then filter
-      const existingItem = items.find(item => item.id === id);
-      if (!existingItem) {
-        return res.status(404).json({ message: "Item not found" });
+      if (!invoice || invoice.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      const newItem = await storage.addInvoiceItem(req.body);
+      
+      return res.status(201).json(newItem);
+    } catch (error) {
+      console.error("Error creating invoice item:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  app.patch("/api/invoice-items/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const itemId = parseInt(req.params.id);
+      
+      // Get the item
+      const items = await storage.getInvoiceItems(req.body.invoiceId);
+      const item = items.find(i => i.id === itemId);
+      
+      if (!item) {
+        return res.status(404).json({ error: "Invoice item not found" });
       }
       
       // Check if the invoice belongs to the user
-      const invoice = await storage.getInvoice(existingItem.invoiceId);
-      if (!invoice || invoice.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Item not found" });
+      const invoice = await storage.getInvoice(item.invoiceId);
+      
+      if (!invoice || invoice.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
-      // Update the item
-      const updatedItem = await storage.updateInvoiceItem(id, itemData);
-      if (!updatedItem) {
-        return res.status(404).json({ message: "Item not found" });
-      }
+      const updatedItem = await storage.updateInvoiceItem(itemId, req.body);
       
-      res.json(updatedItem);
+      return res.json(updatedItem);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: error.format()
-        });
-      }
-      throw error;
+      console.error("Error updating invoice item:", error);
+      return res.status(500).json({ error: "Server error" });
     }
-  });
-  
-  app.delete("/api/invoice-items/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid item ID" });
-    }
-    
-    // Get the item from invoice items
-    const items = await storage.getInvoiceItems(0); // Get all items and filter by id
-    const existingItem = items.find(item => item.id === id);
-    if (!existingItem) {
-      return res.status(404).json({ message: "Item not found" });
-    }
-    
-    // Check if the invoice belongs to the user
-    const invoice = await storage.getInvoice(existingItem.invoiceId);
-    if (!invoice || invoice.userId !== req.user!.id) {
-      return res.status(404).json({ message: "Item not found" });
-    }
-    
-    const deleted = await storage.deleteInvoiceItem(id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Item not found" });
-    }
-    
-    res.status(204).end();
-  });
-  
-  // Dashboard stats
-  app.get("/api/dashboard/stats", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const stats = await storage.getInvoiceStats(req.user!.id);
-    res.json(stats);
   });
 
-  const httpServer = createServer(app);
+  app.delete("/api/invoice-items/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const itemId = parseInt(req.params.id);
+      
+      // First find the item to get the invoice ID
+      const invoiceId = parseInt(req.query.invoiceId as string);
+      
+      if (!invoiceId) {
+        return res.status(400).json({ error: "Invoice ID is required" });
+      }
+      
+      // Check if the invoice belongs to the user
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      await storage.deleteInvoiceItem(itemId);
+      
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting invoice item:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Dashboard/analytics endpoints
+  app.get("/api/dashboard/stats", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const stats = await storage.getInvoiceStats(req.user.id);
+      return res.json(stats);
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Create the HTTP server
+  const httpServer = new Server(app);
+  
   return httpServer;
 }

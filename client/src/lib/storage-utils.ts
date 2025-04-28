@@ -1,9 +1,9 @@
 import { supabase } from './supabase';
 
-// File storage buckets
+// Define storage bucket names
 export const STORAGE_BUCKETS = {
   COMPANY_LOGOS: 'company-logos',
-  INVOICE_ATTACHMENTS: 'invoice-attachments',
+  INVOICE_ATTACHMENTS: 'invoice-attachments'
 };
 
 /**
@@ -11,37 +11,31 @@ export const STORAGE_BUCKETS = {
  */
 export async function initializeStorage() {
   try {
-    // Check and create company logos bucket
-    const { data: logosBucket, error: logosError } = await supabase.storage.getBucket(STORAGE_BUCKETS.COMPANY_LOGOS);
-    if (!logosBucket && logosError) {
-      const { data, error } = await supabase.storage.createBucket(STORAGE_BUCKETS.COMPANY_LOGOS, {
-        public: true,
-        fileSizeLimit: 1024 * 1024, // 1MB
-        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml']
+    // Create company logos bucket if it doesn't exist
+    const { data: buckets } = await supabase.storage.listBuckets();
+    
+    // Check if company logos bucket exists
+    if (!buckets?.find(bucket => bucket.name === STORAGE_BUCKETS.COMPANY_LOGOS)) {
+      console.log('Creating company logos bucket...');
+      await supabase.storage.createBucket(STORAGE_BUCKETS.COMPANY_LOGOS, {
+        public: true, // Make it publicly accessible
+        fileSizeLimit: 1024 * 1024 // 1MB limit
       });
-      
-      if (error) {
-        console.error('Error creating company logos bucket:', error);
-      }
     }
     
-    // Check and create invoice attachments bucket
-    const { data: attachmentsBucket, error: attachmentsError } = await supabase.storage.getBucket(STORAGE_BUCKETS.INVOICE_ATTACHMENTS);
-    if (!attachmentsBucket && attachmentsError) {
-      const { data, error } = await supabase.storage.createBucket(STORAGE_BUCKETS.INVOICE_ATTACHMENTS, {
-        public: true,
-        fileSizeLimit: 5 * 1024 * 1024, // 5MB
-        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf']
+    // Check if invoice attachments bucket exists
+    if (!buckets?.find(bucket => bucket.name === STORAGE_BUCKETS.INVOICE_ATTACHMENTS)) {
+      console.log('Creating invoice attachments bucket...');
+      await supabase.storage.createBucket(STORAGE_BUCKETS.INVOICE_ATTACHMENTS, {
+        public: false, // Keep it private
+        fileSizeLimit: 5 * 1024 * 1024 // 5MB limit
       });
-      
-      if (error) {
-        console.error('Error creating invoice attachments bucket:', error);
-      }
     }
     
-    console.log('Supabase storage buckets initialized');
+    return true;
   } catch (error) {
     console.error('Error initializing storage buckets:', error);
+    return false;
   }
 }
 
@@ -54,22 +48,24 @@ export async function initializeStorage() {
  */
 export async function uploadFile(bucket: string, file: File, path?: string): Promise<string | null> {
   try {
-    const filePath = path 
-      ? `${path}/${file.name}` 
-      : `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+    // Generate a unique file name using timestamp and original name
+    const timestamp = new Date().getTime();
+    const fileExt = file.name.split('.').pop();
+    const fileName = path 
+      ? `${path}/${timestamp}-${file.name}` 
+      : `${timestamp}-${file.name}`;
     
+    // Upload file to Supabase Storage
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(filePath, file, {
+      .upload(fileName, file, {
         cacheControl: '3600',
         upsert: true
       });
     
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
     
-    // Get the public URL
+    // Get public URL for the file
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
       .getPublicUrl(data.path);
@@ -89,13 +85,11 @@ export async function uploadFile(bucket: string, file: File, path?: string): Pro
  */
 export async function deleteFile(bucket: string, path: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from(bucket)
       .remove([path]);
     
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
     
     return true;
   } catch (error) {
@@ -112,14 +106,16 @@ export async function deleteFile(bucket: string, path: string): Promise<boolean>
  */
 export function getPathFromUrl(url: string, bucket: string): string | null {
   try {
-    const urlObj = new URL(url);
-    const pathSegments = urlObj.pathname.split('/');
-    const bucketIndex = pathSegments.findIndex(segment => segment === bucket);
+    // Extract the path from the URL
+    // Format: https://<project-ref>.supabase.co/storage/v1/object/public/<bucket>/<path>
+    const regex = new RegExp(`/storage/v1/object/public/${bucket}/(.+)`);
+    const match = url.match(regex);
     
-    if (bucketIndex === -1) return null;
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
     
-    // Return the path after the bucket name
-    return pathSegments.slice(bucketIndex + 1).join('/');
+    return null;
   } catch (error) {
     console.error('Error extracting path from URL:', error);
     return null;
