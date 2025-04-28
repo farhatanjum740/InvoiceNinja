@@ -141,7 +141,7 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">{buttonLabel}</Button>
+        <Button type="button" variant="outline">{buttonLabel}</Button>
       </DialogTrigger>
       <DialogContent className="max-w-xl">
         <DialogHeader>
@@ -149,7 +149,11 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-4">
+          {/* Important: This is a child form that should NOT submit the parent form */}
+          <form onSubmit={(e) => {
+            e.preventDefault(); // Prevent default form submission
+            form.handleSubmit(onSubmit)(e); // Handle submission with our function
+          }} className="space-y-6 mt-4">
             {products && products.length > 0 && (
               <FormField
                 control={form.control}
@@ -332,7 +336,16 @@ export function InvoiceItemForm({ products, onAddItem, buttonLabel }: InvoiceIte
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Add Item</Button>
+              <Button 
+                type="button" 
+                onClick={(e) => {
+                  // Manually handle the form submission to prevent parent form submission
+                  e.preventDefault();
+                  form.handleSubmit(onSubmit)(e);
+                }}
+              >
+                Add Item
+              </Button>
             </div>
           </form>
         </Form>
