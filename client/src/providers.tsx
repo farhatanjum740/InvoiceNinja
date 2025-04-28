@@ -2,8 +2,7 @@ import { ReactNode, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { AuthProvider } from "./hooks/use-auth";
-import { initializeStorage } from "./lib/storage-utils";
-import { supabase } from "./lib/supabase";
+import { initializeStorage } from "./lib/supabase";
 
 interface ProvidersProps {
   children: ReactNode;

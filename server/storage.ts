@@ -168,34 +168,229 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCustomersByUserId(userId: number): Promise<Customer[]> {
-    return db.select().from(customers).where(eq(customers.userId, userId));
+    try {
+      // Try using Supabase first
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', userId);
+        
+      if (error) {
+        console.error("Supabase customer fetch error:", error);
+        // Fall back to direct DB query
+        return db.select().from(customers).where(eq(customers.userId, userId));
+      }
+      
+      // Transform Supabase snake_case to camelCase
+      return data.map((c: any) => ({
+        id: c.id,
+        userId: c.user_id,
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        gstin: c.gstin,
+        billingAddress: c.billing_address,
+        billingCity: c.billing_city,
+        billingState: c.billing_state,
+        billingPincode: c.billing_pincode,
+        shippingAddress: c.shipping_address,
+        shippingCity: c.shipping_city,
+        shippingState: c.shipping_state,
+        shippingPincode: c.shipping_pincode,
+        sameAsShipping: c.same_as_shipping
+      }));
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      // Fall back to direct DB query
+      return db.select().from(customers).where(eq(customers.userId, userId));
+    }
   }
 
   async getCustomer(id: number): Promise<Customer | undefined> {
-    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
-    return customer;
+    try {
+      // Try using Supabase first
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (error) {
+        console.error("Supabase customer fetch error:", error);
+        // Fall back to direct DB query
+        const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+        return customer;
+      }
+      
+      if (!data) return undefined;
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        gstin: data.gstin,
+        billingAddress: data.billing_address,
+        billingCity: data.billing_city,
+        billingState: data.billing_state,
+        billingPincode: data.billing_pincode,
+        shippingAddress: data.shipping_address,
+        shippingCity: data.shipping_city,
+        shippingState: data.shipping_state,
+        shippingPincode: data.shipping_pincode,
+        sameAsShipping: data.same_as_shipping
+      };
+    } catch (error) {
+      console.error("Error fetching customer:", error);
+      // Fall back to direct DB query
+      const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+      return customer;
+    }
   }
 
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
-    const [newCustomer] = await db.insert(customers).values(customer).returning();
-    return newCustomer;
+    try {
+      // Transform to snake_case for Supabase
+      const supabaseCustomer = {
+        user_id: customer.userId,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        gstin: customer.gstin,
+        billing_address: customer.billingAddress,
+        billing_city: customer.billingCity,
+        billing_state: customer.billingState,
+        billing_pincode: customer.billingPincode,
+        shipping_address: customer.shippingAddress,
+        shipping_city: customer.shippingCity,
+        shipping_state: customer.shippingState,
+        shipping_pincode: customer.shippingPincode,
+        same_as_shipping: customer.sameAsShipping
+      };
+      
+      // Insert using Supabase
+      const { data, error } = await supabase
+        .from('customers')
+        .insert(supabaseCustomer)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase customer insert error:", error);
+        // Fall back to direct DB insert
+        const [newCustomer] = await db.insert(customers).values(customer).returning();
+        return newCustomer;
+      }
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        gstin: data.gstin,
+        billingAddress: data.billing_address,
+        billingCity: data.billing_city,
+        billingState: data.billing_state,
+        billingPincode: data.billing_pincode,
+        shippingAddress: data.shipping_address,
+        shippingCity: data.shipping_city,
+        shippingState: data.shipping_state,
+        shippingPincode: data.shipping_pincode,
+        sameAsShipping: data.same_as_shipping
+      };
+    } catch (error) {
+      console.error("Error creating customer:", error);
+      // Fall back to direct DB insert
+      const [newCustomer] = await db.insert(customers).values(customer).returning();
+      return newCustomer;
+    }
   }
 
   async updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined> {
-    const [updatedCustomer] = await db
-      .update(customers)
-      .set(customer)
-      .where(eq(customers.id, id))
-      .returning();
-    return updatedCustomer;
+    try {
+      // Transform to snake_case for Supabase
+      const supabaseCustomer: Record<string, any> = {};
+      if (customer.userId !== undefined) supabaseCustomer.user_id = customer.userId;
+      if (customer.name !== undefined) supabaseCustomer.name = customer.name;
+      if (customer.email !== undefined) supabaseCustomer.email = customer.email;
+      if (customer.phone !== undefined) supabaseCustomer.phone = customer.phone;
+      if (customer.gstin !== undefined) supabaseCustomer.gstin = customer.gstin;
+      if (customer.billingAddress !== undefined) supabaseCustomer.billing_address = customer.billingAddress;
+      if (customer.billingCity !== undefined) supabaseCustomer.billing_city = customer.billingCity;
+      if (customer.billingState !== undefined) supabaseCustomer.billing_state = customer.billingState;
+      if (customer.billingPincode !== undefined) supabaseCustomer.billing_pincode = customer.billingPincode;
+      if (customer.shippingAddress !== undefined) supabaseCustomer.shipping_address = customer.shippingAddress;
+      if (customer.shippingCity !== undefined) supabaseCustomer.shipping_city = customer.shippingCity;
+      if (customer.shippingState !== undefined) supabaseCustomer.shipping_state = customer.shippingState;
+      if (customer.shippingPincode !== undefined) supabaseCustomer.shipping_pincode = customer.shippingPincode;
+      if (customer.sameAsShipping !== undefined) supabaseCustomer.same_as_shipping = customer.sameAsShipping;
+      
+      // Update using Supabase
+      const { data, error } = await supabase
+        .from('customers')
+        .update(supabaseCustomer)
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase customer update error:", error);
+        // Fall back to direct DB update
+        const [updatedCustomer] = await db.update(customers).set(customer).where(eq(customers.id, id)).returning();
+        return updatedCustomer;
+      }
+      
+      if (!data) return undefined;
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        gstin: data.gstin,
+        billingAddress: data.billing_address,
+        billingCity: data.billing_city,
+        billingState: data.billing_state,
+        billingPincode: data.billing_pincode,
+        shippingAddress: data.shipping_address,
+        shippingCity: data.shipping_city,
+        shippingState: data.shipping_state,
+        shippingPincode: data.shipping_pincode,
+        sameAsShipping: data.same_as_shipping
+      };
+    } catch (error) {
+      console.error("Error updating customer:", error);
+      // Fall back to direct DB update
+      const [updatedCustomer] = await db.update(customers).set(customer).where(eq(customers.id, id)).returning();
+      return updatedCustomer;
+    }
   }
 
   async deleteCustomer(id: number): Promise<boolean> {
-    const [deletedCustomer] = await db
-      .delete(customers)
-      .where(eq(customers.id, id))
-      .returning();
-    return !!deletedCustomer;
+    try {
+      // Delete using Supabase
+      const { error } = await supabase.from('customers').delete().eq('id', id);
+        
+      if (error) {
+        console.error("Supabase customer delete error:", error);
+        // Fall back to direct DB delete
+        const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
+        return !!deletedCustomer;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      // Fall back to direct DB delete
+      const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
+      return !!deletedCustomer;
+    }
   }
 
   async getProductsByUserId(userId: number): Promise<Product[]> {
