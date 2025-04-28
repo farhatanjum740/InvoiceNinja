@@ -1082,290 +1082,281 @@ export class SupabaseStorage implements IStorage {
     
     console.log("Starting invoice creation process with", items.length, "items");
     
-    try {
-      // Reset sequences first to avoid conflicts
+    // ===== Completely new implementation using direct SQL for both invoice and items ======
+    if (process.env.DATABASE_URL) {
+      // We'll use a direct SQL approach with an explicit transaction
+      console.log("Using direct SQL transaction for invoice creation");
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      
       try {
-        // Reset both sequences to avoid duplicate key errors
-        await supabase.rpc('reset_invoices_sequence');
-        await supabase.rpc('reset_invoice_items_sequence');
-        console.log("Reset invoice and invoice_items sequences successfully");
-      } catch (seqError) {
-        console.error("Failed to reset sequences, will attempt alternative method:", seqError);
+        // Start transaction
+        await pool.query('BEGIN');
         
-        // Try to reset sequences using the utility function as backup
-        try {
-          // Using properly imported resetSequences
-          console.log("Attempting to reset sequences with imported function");
-          await resetSequences();
-        } catch (utilError) {
-          console.error("Failed to reset sequences using utility function:", utilError);
-          // Continue despite sequence reset failure - Supabase will handle conflicts
-        }
-      }
-
-      // Transform invoice to snake_case for Supabase
-      // Ensure all values are properly formatted and valid
-      const supabaseInvoice = {
-        user_id: invoice.userId,
-        customer_id: invoice.customerId,
-        invoice_number: invoice.invoiceNumber || `INV-${Date.now()}`,
-        invoice_date: invoice.invoiceDate,
-        due_date: invoice.dueDate || null,
-        notes: invoice.notes || '',
-        status: invoice.status || 'draft',
-        subtotal: invoice.subtotal || '0.00',
-        cgst: invoice.cgst || '0.00',
-        sgst: invoice.sgst || '0.00',
-        igst: invoice.igst || '0.00',
-        total: invoice.total || '0.00',
-        terms_and_conditions: invoice.termsAndConditions || '',
-        template_id: invoice.templateId || 'standard',
-        color_theme: invoice.colorTheme || 'blue'
-      };
-      
-      console.log("Processed invoice data:", supabaseInvoice);
-      
-      // Step 1: Insert the invoice 
-      console.log("Step 1: Inserting invoice record");
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert(supabaseInvoice)
-        .select()
-        .single();
-        
-      if (invoiceError) {
-        console.error("Supabase invoice insert error:", invoiceError);
-        throw new Error(`Failed to create invoice: ${invoiceError.message}`);
-      }
-      
-      if (!invoiceData || !invoiceData.id) {
-        throw new Error("Invoice creation returned no data or ID");
-      }
-      
-      console.log("Invoice created successfully with ID:", invoiceData.id);
-      
-      // Step 2: Process and insert invoice items
-      console.log(`Step 2: Processing ${items.length} invoice items`);
-      
-      // Transform items to snake_case for Supabase and validate data
-      const supabaseItems = items.map((item, index) => {
-        // Ensure numeric values are valid numbers and convert strings to numbers if needed
-        const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity || 1);
-        const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0);
-        const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
-        const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate || 0);
-
-        // Verify values are actually numbers and provide fallbacks
-        if (isNaN(quantity) || isNaN(rate) || isNaN(amount)) {
-          console.warn(`Item ${index} has invalid numeric values, using defaults:`, { 
-            quantity, rate, amount, description: item.description 
-          });
-        }
-        
-        // Return properly formatted item with guaranteed valid values
-        return {
-          invoice_id: invoiceData.id,
-          product_id: item.productId || null,
-          description: item.description || `Item ${index + 1}`,
-          unit: item.unit || 'Piece',
-          quantity: isNaN(quantity) ? 1 : quantity,
-          rate: isNaN(rate) ? 0 : rate,
-          amount: isNaN(amount) ? quantity * rate : amount,
-          gst_rate: isNaN(gstRate) ? 0 : gstRate,
-          hsn_code: item.hsnCode || null
+        // Transform invoice to snake_case for SQL
+        const sqlInvoice = {
+          user_id: invoice.userId,
+          customer_id: invoice.customerId,
+          invoice_number: invoice.invoiceNumber || `INV-${Date.now()}`,
+          invoice_date: invoice.invoiceDate,
+          due_date: invoice.dueDate || null,
+          notes: invoice.notes || '',
+          status: invoice.status || 'draft',
+          subtotal: invoice.subtotal || '0.00',
+          cgst: invoice.cgst || '0.00',
+          sgst: invoice.sgst || '0.00',
+          igst: invoice.igst || '0.00',
+          total: invoice.total || '0.00',
+          terms_and_conditions: invoice.termsAndConditions || '',
+          template_id: invoice.templateId || 'standard',
+          color_theme: invoice.colorTheme || 'blue'
         };
-      });
-      
-      console.log("Processed invoice items:", supabaseItems);
-      
+        
+        console.log("Creating invoice with SQL transaction...");
+        
+        // 1. Insert the invoice and get the ID
+        const invoiceResult = await pool.query(`
+          INSERT INTO invoices
+            (user_id, customer_id, invoice_number, invoice_date, due_date, notes, status, 
+             subtotal, cgst, sgst, igst, total, terms_and_conditions, template_id, color_theme)
+          VALUES 
+            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          RETURNING id
+        `, [
+          sqlInvoice.user_id,
+          sqlInvoice.customer_id,
+          sqlInvoice.invoice_number,
+          sqlInvoice.invoice_date,
+          sqlInvoice.due_date,
+          sqlInvoice.notes,
+          sqlInvoice.status,
+          sqlInvoice.subtotal,
+          sqlInvoice.cgst,
+          sqlInvoice.sgst,
+          sqlInvoice.igst,
+          sqlInvoice.total,
+          sqlInvoice.terms_and_conditions,
+          sqlInvoice.template_id,
+          sqlInvoice.color_theme
+        ]);
+        
+        if (!invoiceResult.rows || invoiceResult.rows.length === 0) {
+          throw new Error("Failed to create invoice - no ID returned");
+        }
+        
+        const invoiceId = invoiceResult.rows[0].id;
+        console.log("Created invoice with ID:", invoiceId);
+        
+        // 2. Process items and prepare for insertion
+        const sqlItems = items.map((item, index) => {
+          // Ensure numeric values are valid numbers
+          const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity || 1);
+          const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0);
+          const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
+          const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate || 0);
+          
+          return {
+            invoice_id: invoiceId,
+            product_id: item.productId || null,
+            description: item.description || `Item ${index + 1}`,
+            unit: item.unit || 'Piece',
+            quantity: isNaN(quantity) ? 1 : quantity,
+            rate: isNaN(rate) ? 0 : rate,
+            amount: isNaN(amount) ? quantity * rate : amount,
+            gst_rate: isNaN(gstRate) ? 0 : gstRate,
+            hsn_code: item.hsnCode || null
+          };
+        });
+        
+        // 3. Insert each item in the same transaction
+        console.log("Inserting", sqlItems.length, "invoice items...");
+        
+        let insertedItems = [];
+        for (const item of sqlItems) {
+          try {
+            const itemResult = await pool.query(`
+              INSERT INTO invoice_items
+                (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
+              VALUES
+                ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              RETURNING id
+            `, [
+              item.invoice_id,
+              item.product_id,
+              item.description,
+              item.unit,
+              item.quantity,
+              item.rate,
+              item.amount,
+              item.gst_rate,
+              item.hsn_code
+            ]);
+            
+            if (itemResult.rows && itemResult.rows.length > 0) {
+              const itemId = itemResult.rows[0].id;
+              console.log(`Added item ${itemId} to invoice ${invoiceId}`);
+              insertedItems.push(itemId);
+            }
+          } catch (itemError: any) {
+            console.error("Error inserting invoice item:", itemError);
+            throw new Error(`Failed to insert invoice item: ${itemError.message || String(itemError)}`);
+          }
+        }
+        
+        // If we couldn't insert any items, rollback
+        if (insertedItems.length === 0) {
+          throw new Error("Failed to insert any invoice items");
+        }
+        
+        // 4. Commit the transaction
+        await pool.query('COMMIT');
+        console.log(`Successfully created invoice #${invoiceId} with ${insertedItems.length} items`);
+        
+        // 5. Fetch the complete invoice data for return
+        const completeInvoice = await pool.query(`
+          SELECT * FROM invoices WHERE id = $1
+        `, [invoiceId]);
+        
+        if (!completeInvoice.rows || completeInvoice.rows.length === 0) {
+          throw new Error("Invoice was created but could not be retrieved");
+        }
+        
+        // Transform the invoice data to camelCase
+        const invoiceData = completeInvoice.rows[0];
+        
+        // Return the formatted result
+        return {
+          id: invoiceData.id,
+          userId: invoiceData.user_id,
+          customerId: invoiceData.customer_id,
+          invoiceNumber: invoiceData.invoice_number,
+          invoiceDate: invoiceData.invoice_date,
+          dueDate: invoiceData.due_date,
+          notes: invoiceData.notes || null,
+          status: invoiceData.status,
+          subtotal: invoiceData.subtotal,
+          cgst: invoiceData.cgst || '0.00',
+          sgst: invoiceData.sgst || '0.00',
+          igst: invoiceData.igst || '0.00',
+          total: invoiceData.total,
+          termsAndConditions: invoiceData.terms_and_conditions || null,
+          templateId: invoiceData.template_id || 'standard',
+          colorTheme: invoiceData.color_theme || 'blue'
+        };
+        
+      } catch (txError: any) {
+        // If anything goes wrong, rollback the transaction
+        console.error("Transaction failed, rolling back:", txError);
+        try {
+          await pool.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error("Error during rollback:", rollbackError);
+        }
+        throw new Error(`Invoice creation failed: ${txError.message || String(txError)}`);
+      } finally {
+        // Always close the connection pool
+        await pool.end();
+      }
+    } else {
+      // Fallback to Supabase if no direct database connection is available
       try {
-        // First attempt: Use Supabase API to insert all items at once
-        console.log("Inserting invoice items via Supabase API");
+        console.log("No DATABASE_URL available, falling back to Supabase API");
+        
+        // Reset sequences first to avoid conflicts
+        try {
+          await supabase.rpc('reset_invoices_sequence');
+          await supabase.rpc('reset_invoice_items_sequence');
+        } catch (seqError) {
+          console.error("Failed to reset sequences:", seqError);
+        }
+        
+        // Transform invoice to snake_case for Supabase
+        const supabaseInvoice = {
+          user_id: invoice.userId,
+          customer_id: invoice.customerId,
+          invoice_number: invoice.invoiceNumber || `INV-${Date.now()}`,
+          invoice_date: invoice.invoiceDate,
+          due_date: invoice.dueDate || null,
+          notes: invoice.notes || '',
+          status: invoice.status || 'draft',
+          subtotal: invoice.subtotal || '0.00',
+          cgst: invoice.cgst || '0.00',
+          sgst: invoice.sgst || '0.00',
+          igst: invoice.igst || '0.00',
+          total: invoice.total || '0.00',
+          terms_and_conditions: invoice.termsAndConditions || '',
+          template_id: invoice.templateId || 'standard',
+          color_theme: invoice.colorTheme || 'blue'
+        };
+        
+        // Insert the invoice
+        const { data: invoiceData, error: invoiceError } = await supabase
+          .from('invoices')
+          .insert(supabaseInvoice)
+          .select()
+          .single();
+          
+        if (invoiceError) {
+          throw new Error(`Failed to create invoice: ${invoiceError.message}`);
+        }
+        
+        if (!invoiceData || !invoiceData.id) {
+          throw new Error("Invoice creation returned no data or ID");
+        }
+        
+        // Process and insert invoice items
+        const supabaseItems = items.map((item, index) => {
+          const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity || 1);
+          const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0);
+          const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
+          const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate || 0);
+          
+          return {
+            invoice_id: invoiceData.id,
+            product_id: item.productId || null,
+            description: item.description || `Item ${index + 1}`,
+            unit: item.unit || 'Piece',
+            quantity: isNaN(quantity) ? 1 : quantity,
+            rate: isNaN(rate) ? 0 : rate,
+            amount: isNaN(amount) ? quantity * rate : amount,
+            gst_rate: isNaN(gstRate) ? 0 : gstRate,
+            hsn_code: item.hsnCode || null
+          };
+        });
+        
+        // Insert the items
         const { error: itemsError } = await supabase
           .from('invoice_items')
           .insert(supabaseItems);
           
         if (itemsError) {
-          console.error("Supabase invoice items insert error:", itemsError);
-          
-          // Special handling for schema cache issues
-          if (itemsError.message && (
-            itemsError.message.includes('unit') || 
-            itemsError.message.includes('column') ||
-            itemsError.message.includes('schema')
-          )) {
-            console.log("Schema cache issue detected, falling back to direct SQL");
-            
-            // Second attempt: Use direct SQL with neon-serverless
-            if (process.env.DATABASE_URL) {
-              console.log("Connecting directly to database via DATABASE_URL");
-              
-              // Create a new pool using imported Pool type
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-              
-              try {
-                // First check if the invoice exists to confirm it's fully committed
-                const checkInvoice = await pool.query(`
-                  SELECT id FROM invoices WHERE id = $1
-                `, [invoiceData.id]);
-                
-                if (!checkInvoice.rows || checkInvoice.rows.length === 0) {
-                  console.log("Invoice not found in database yet. Adding short delay to ensure transaction completion...");
-                  
-                  // Wait a moment for the invoice to be committed
-                  await new Promise(resolve => setTimeout(resolve, 500));
-                  
-                  // Check again after delay
-                  const recheckInvoice = await pool.query(`
-                    SELECT id FROM invoices WHERE id = $1
-                  `, [invoiceData.id]);
-                  
-                  if (!recheckInvoice.rows || recheckInvoice.rows.length === 0) {
-                    console.error("Invoice still not found after delay. Creating it directly via SQL.");
-                    
-                    // Try to manually insert the invoice via direct SQL as fallback
-                    await pool.query(`
-                      INSERT INTO invoices 
-                      (id, user_id, customer_id, invoice_number, invoice_date, due_date, status, 
-                       subtotal, cgst, sgst, igst, total, notes, terms_and_conditions, template_id, color_theme)
-                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-                    `, [
-                      invoiceData.id,
-                      supabaseInvoice.user_id,
-                      supabaseInvoice.customer_id,
-                      supabaseInvoice.invoice_number,
-                      supabaseInvoice.invoice_date,
-                      supabaseInvoice.due_date,
-                      supabaseInvoice.status,
-                      supabaseInvoice.subtotal,
-                      supabaseInvoice.cgst,
-                      supabaseInvoice.sgst,
-                      supabaseInvoice.igst,
-                      supabaseInvoice.total,
-                      supabaseInvoice.notes,
-                      supabaseInvoice.terms_and_conditions,
-                      supabaseInvoice.template_id,
-                      supabaseInvoice.color_theme
-                    ]);
-                    
-                    console.log("Invoice recreated via direct SQL with ID:", invoiceData.id);
-                  } else {
-                    console.log("Invoice found after delay with ID:", invoiceData.id);
-                  }
-                } else {
-                  console.log("Invoice confirmed in database with ID:", invoiceData.id);
-                }
-                
-                // Now proceed with inserting items
-                console.log("Starting invoice item insertion with direct SQL...");
-                let insertedCount = 0;
-                
-                // Use transaction for all items to ensure consistency
-                await pool.query('BEGIN');
-                
-                try {
-                  for (const item of supabaseItems) {
-                    try {
-                      const result = await pool.query(`
-                        INSERT INTO invoice_items 
-                        (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                        RETURNING id
-                      `, [
-                        item.invoice_id, 
-                        item.product_id, 
-                        item.description, 
-                        item.unit, 
-                        item.quantity, 
-                        item.rate, 
-                        item.amount, 
-                        item.gst_rate, 
-                        item.hsn_code
-                      ]);
-                      
-                      // Verify successful insert
-                      if (result && result.rows && result.rows[0] && result.rows[0].id) {
-                        console.log(`Added invoice item via direct SQL with ID ${result.rows[0].id}`);
-                        insertedCount++;
-                      } else {
-                        console.error("SQL query returned no ID for inserted item:", item);
-                      }
-                    } catch (itemError) {
-                      console.error("Error inserting individual invoice item:", itemError);
-                      throw itemError; // Propagate error to trigger rollback
-                    }
-                  }
-                  
-                  // Commit transaction if all items inserted successfully
-                  await pool.query('COMMIT');
-                  console.log(`SQL insertion complete: ${insertedCount} of ${supabaseItems.length} items inserted`);
-                } catch (transactionError) {
-                  // Rollback transaction if any error occurred
-                  await pool.query('ROLLBACK');
-                  console.error("Transaction rolled back due to error:", transactionError);
-                  throw transactionError;
-                }
-                
-                // If no items were inserted, something is wrong
-                if (insertedCount === 0) {
-                  throw new Error("Failed to insert any invoice items via direct SQL");
-                }
-              } catch (sqlError: any) {
-                console.error("Error with direct SQL insertion:", sqlError);
-                // Roll back invoice if all direct SQL inserts failed
-                await supabase.from('invoices').delete().eq('id', invoiceData.id);
-                throw new Error(`Database error: ${sqlError.message || String(sqlError)}`);
-              } finally {
-                // Always close the database pool to prevent resource leaks
-                await pool.end();
-              }
-            } else {
-              // No DATABASE_URL - critical failure
-              console.error("No DATABASE_URL available for direct SQL fallback");
-              await supabase.from('invoices').delete().eq('id', invoiceData.id);
-              throw new Error("Cannot insert invoice items: no database connection available");
-            }
-          } else {
-            // Not a schema error - something else is wrong
-            console.error("Invoice items insert failed with non-schema error:", itemsError);
-            await supabase.from('invoices').delete().eq('id', invoiceData.id);
-            throw new Error(`Failed to add invoice items: ${itemsError.message}`);
-          }
-        } else {
-          console.log("Successfully inserted all invoice items via Supabase API");
+          // Roll back invoice if items insertion fails
+          await supabase.from('invoices').delete().eq('id', invoiceData.id);
+          throw new Error(`Failed to add invoice items: ${itemsError.message}`);
         }
-      } catch (itemInsertError: any) {
-        console.error("Exception during invoice items insert process:", itemInsertError);
-        // Roll back invoice if all item insertion approaches failed
-        await supabase.from('invoices').delete().eq('id', invoiceData.id);
-        throw new Error(`Failed to create invoice items: ${itemInsertError.message || String(itemInsertError) || 'Unknown error'}`);
+        
+        // Transform back to camelCase
+        return {
+          id: invoiceData.id,
+          userId: invoiceData.user_id,
+          customerId: invoiceData.customer_id,
+          invoiceNumber: invoiceData.invoice_number,
+          invoiceDate: invoiceData.invoice_date,
+          dueDate: invoiceData.due_date,
+          notes: invoiceData.notes || null,
+          status: invoiceData.status,
+          subtotal: invoiceData.subtotal,
+          cgst: invoiceData.cgst || '0.00',
+          sgst: invoiceData.sgst || '0.00',
+          igst: invoiceData.igst || '0.00',
+          total: invoiceData.total,
+          termsAndConditions: invoiceData.terms_and_conditions || null,
+          templateId: invoiceData.template_id || 'standard',
+          colorTheme: invoiceData.color_theme || 'blue'
+        };
+      } catch (error: any) {
+        console.error("Error in createInvoice process:", error);
+        throw new Error(`Invoice creation failed: ${error.message || 'Unknown error'}`);
       }
-      
-      // Successfully created invoice with items - return formatted result
-      console.log("Invoice creation complete with ID:", invoiceData.id);
-      
-      // Transform back to camelCase
-      return {
-        id: invoiceData.id,
-        userId: invoiceData.user_id,
-        customerId: invoiceData.customer_id,
-        invoiceNumber: invoiceData.invoice_number,
-        invoiceDate: invoiceData.invoice_date,
-        dueDate: invoiceData.due_date,
-        notes: invoiceData.notes || null,
-        status: invoiceData.status,
-        subtotal: invoiceData.subtotal,
-        cgst: invoiceData.cgst || '0.00',
-        sgst: invoiceData.sgst || '0.00',
-        igst: invoiceData.igst || '0.00',
-        total: invoiceData.total,
-        termsAndConditions: invoiceData.terms_and_conditions || null,
-        templateId: invoiceData.template_id || 'standard',
-        colorTheme: invoiceData.color_theme || 'blue'
-      };
-    } catch (error: any) {
-      console.error("Error in createInvoice process:", error);
-      throw new Error(`Invoice creation failed: ${error.message || 'Unknown error'}`);
     }
   }
 
