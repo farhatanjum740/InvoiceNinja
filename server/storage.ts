@@ -1,11 +1,10 @@
 import { users, type User, type InsertUser, companies, type Company, type InsertCompany, customers, type Customer, type InsertCustomer, products, type Product, type InsertProduct, invoices, type Invoice, type InsertInvoice, invoiceItems, type InvoiceItem, type InsertInvoiceItem } from "@shared/schema";
-import { db, client, supabase } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { supabase } from "./db";
 import session from "express-session";
-import connectPg from "connect-pg-simple";
 import MemoryStore from "memorystore";
 
-const PostgresSessionStore = connectPg(session);
+// Initialize the memory store for sessions
+const MemStore = MemoryStore(session);
 
 // Interface for storage operations
 export interface IStorage {
@@ -60,37 +59,44 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
-export class DatabaseStorage implements IStorage {
+// New implementation using Supabase only
+export class SupabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
     // Use memory store for sessions to avoid connection issues
-    const MemStore = MemoryStore(session);
     this.sessionStore = new MemStore({
       checkPeriod: 86400000 // 24 hours
     });
     console.log('Using memory store for sessions');
-    
-    // We'll implement PostgreSQL session store later when connection issues are resolved
-    // For reference, here's how to set it up:
-    //
-    // this.sessionStore = new PostgresSessionStore({ 
-    //   conObject: {
-    //     host: process.env.PGHOST,
-    //     port: parseInt(process.env.PGPORT || '5432'),
-    //     database: process.env.PGDATABASE,
-    //     user: process.env.PGUSER,
-    //     password: process.env.PGPASSWORD,
-    //     ssl: { rejectUnauthorized: false }
-    //   },
-    //   createTableIfMissing: true 
-    // });
   }
 
   async getUser(id: number): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.id, id));
-      return user;
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (error) {
+        console.error("Supabase user fetch error:", error);
+        return undefined;
+      }
+      
+      if (!data) return undefined;
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        fullName: data.full_name,
+        supabaseId: data.supabase_id,
+        createdAt: new Date(data.created_at)
+      };
     } catch (error) {
       console.error("Error in getUser:", error);
       return undefined;
@@ -99,8 +105,30 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.username, username));
-      return user;
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
+        
+      if (error) {
+        console.error("Supabase user fetch error:", error);
+        return undefined;
+      }
+      
+      if (!data) return undefined;
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        fullName: data.full_name,
+        supabaseId: data.supabase_id,
+        createdAt: new Date(data.created_at)
+      };
     } catch (error) {
       console.error("Error in getUserByUsername:", error);
       return undefined;
@@ -109,8 +137,30 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.email, email));
-      return user;
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+        
+      if (error) {
+        console.error("Supabase user fetch error:", error);
+        return undefined;
+      }
+      
+      if (!data) return undefined;
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        fullName: data.full_name,
+        supabaseId: data.supabase_id,
+        createdAt: new Date(data.created_at)
+      };
     } catch (error) {
       console.error("Error in getUserByEmail:", error);
       return undefined;
@@ -119,57 +169,206 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     try {
-      const [user] = await db.insert(users).values(insertUser).returning();
-      return user;
+      // Convert from camelCase to snake_case for Supabase
+      const supabaseUser = {
+        username: insertUser.username,
+        email: insertUser.email,
+        password: insertUser.password,
+        name: insertUser.name,
+        full_name: insertUser.fullName,
+        supabase_id: insertUser.supabaseId
+      };
+      
+      const { data, error } = await supabase
+        .from('users')
+        .insert(supabaseUser)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase user insert error:", error);
+        throw error;
+      }
+      
+      // Transform back to camelCase for our app
+      return {
+        id: data.id,
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        fullName: data.full_name,
+        supabaseId: data.supabase_id,
+        createdAt: new Date(data.created_at)
+      };
     } catch (error) {
       console.error("Error in createUser:", error);
-      // Create tables if they don't exist (first run situation)
-      try {
-        await db.execute(/* sql */`
-          CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username TEXT NOT NULL UNIQUE,
-            email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            name TEXT,
-            full_name TEXT,
-            supabase_id TEXT UNIQUE,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        
-        // Try again after creating the table
-        const [user] = await db.insert(users).values(insertUser).returning();
-        return user;
-      } catch (tableError) {
-        console.error("Error creating users table:", tableError);
-        throw error; // Rethrow the original error
-      }
+      throw error;
     }
   }
 
   async getCompanyByUserId(userId: number): Promise<Company | undefined> {
-    const [company] = await db.select().from(companies).where(eq(companies.userId, userId));
-    return company;
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+        
+      if (error) {
+        console.error("Supabase company fetch error:", error);
+        return undefined;
+      }
+      
+      if (!data) return undefined;
+      
+      // Transform Supabase snake_case to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        pincode: data.pincode,
+        gstin: data.gstin,
+        email: data.email,
+        phone: data.phone,
+        bankName: data.bank_name,
+        bankAccountNo: data.bank_account_no,
+        bankIfsc: data.bank_ifsc,
+        logoUrl: data.logo_url,
+        panNo: data.pan_no,
+        iecCode: data.iec_code,
+        adCode: data.ad_code
+      };
+    } catch (error) {
+      console.error("Error in getCompanyByUserId:", error);
+      return undefined;
+    }
   }
 
   async createCompany(company: InsertCompany): Promise<Company> {
-    const [newCompany] = await db.insert(companies).values(company).returning();
-    return newCompany;
+    try {
+      // Convert from camelCase to snake_case for Supabase
+      const supabaseCompany = {
+        user_id: company.userId,
+        name: company.name,
+        address: company.address,
+        city: company.city,
+        state: company.state,
+        pincode: company.pincode,
+        gstin: company.gstin,
+        email: company.email,
+        phone: company.phone,
+        bank_name: company.bankName,
+        bank_account_no: company.bankAccountNo,
+        bank_ifsc: company.bankIfsc,
+        logo_url: company.logoUrl,
+        pan_no: company.panNo,
+        iec_code: company.iecCode,
+        ad_code: company.adCode
+      };
+      
+      const { data, error } = await supabase
+        .from('companies')
+        .insert(supabaseCompany)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase company insert error:", error);
+        throw error;
+      }
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        pincode: data.pincode,
+        gstin: data.gstin,
+        email: data.email,
+        phone: data.phone,
+        bankName: data.bank_name,
+        bankAccountNo: data.bank_account_no,
+        bankIfsc: data.bank_ifsc,
+        logoUrl: data.logo_url,
+        panNo: data.pan_no,
+        iecCode: data.iec_code,
+        adCode: data.ad_code
+      };
+    } catch (error) {
+      console.error("Error in createCompany:", error);
+      throw error;
+    }
   }
 
   async updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company | undefined> {
-    const [updatedCompany] = await db
-      .update(companies)
-      .set(company)
-      .where(eq(companies.id, id))
-      .returning();
-    return updatedCompany;
+    try {
+      // Convert partial company from camelCase to snake_case
+      const supabaseCompany: Record<string, any> = {};
+      
+      if ('userId' in company) supabaseCompany.user_id = company.userId;
+      if ('name' in company) supabaseCompany.name = company.name;
+      if ('address' in company) supabaseCompany.address = company.address;
+      if ('city' in company) supabaseCompany.city = company.city;
+      if ('state' in company) supabaseCompany.state = company.state;
+      if ('pincode' in company) supabaseCompany.pincode = company.pincode;
+      if ('gstin' in company) supabaseCompany.gstin = company.gstin;
+      if ('email' in company) supabaseCompany.email = company.email;
+      if ('phone' in company) supabaseCompany.phone = company.phone;
+      if ('bankName' in company) supabaseCompany.bank_name = company.bankName;
+      if ('bankAccountNo' in company) supabaseCompany.bank_account_no = company.bankAccountNo;
+      if ('bankIfsc' in company) supabaseCompany.bank_ifsc = company.bankIfsc;
+      if ('logoUrl' in company) supabaseCompany.logo_url = company.logoUrl;
+      if ('panNo' in company) supabaseCompany.pan_no = company.panNo;
+      if ('iecCode' in company) supabaseCompany.iec_code = company.iecCode;
+      if ('adCode' in company) supabaseCompany.ad_code = company.adCode;
+      
+      const { data, error } = await supabase
+        .from('companies')
+        .update(supabaseCompany)
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error("Supabase company update error:", error);
+        return undefined;
+      }
+      
+      // Transform back to camelCase
+      return {
+        id: data.id,
+        userId: data.user_id,
+        name: data.name,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        pincode: data.pincode,
+        gstin: data.gstin,
+        email: data.email,
+        phone: data.phone,
+        bankName: data.bank_name,
+        bankAccountNo: data.bank_account_no,
+        bankIfsc: data.bank_ifsc,
+        logoUrl: data.logo_url,
+        panNo: data.pan_no,
+        iecCode: data.iec_code,
+        adCode: data.ad_code
+      };
+    } catch (error) {
+      console.error("Error in updateCompany:", error);
+      return undefined;
+    }
   }
 
   async getCustomersByUserId(userId: number): Promise<Customer[]> {
     try {
-      // Try using Supabase first
       const { data, error } = await supabase
         .from('customers')
         .select('*')
@@ -177,8 +376,7 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase customer fetch error:", error);
-        // Fall back to direct DB query
-        return db.select().from(customers).where(eq(customers.userId, userId));
+        return [];
       }
       
       // Transform Supabase snake_case to camelCase
@@ -201,14 +399,12 @@ export class DatabaseStorage implements IStorage {
       }));
     } catch (error) {
       console.error("Error fetching customers:", error);
-      // Fall back to direct DB query
-      return db.select().from(customers).where(eq(customers.userId, userId));
+      return [];
     }
   }
 
   async getCustomer(id: number): Promise<Customer | undefined> {
     try {
-      // Try using Supabase first
       const { data, error } = await supabase
         .from('customers')
         .select('*')
@@ -217,9 +413,7 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase customer fetch error:", error);
-        // Fall back to direct DB query
-        const [customer] = await db.select().from(customers).where(eq(customers.id, id));
-        return customer;
+        return undefined;
       }
       
       if (!data) return undefined;
@@ -244,35 +438,28 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error fetching customer:", error);
-      // Fall back to direct DB query
-      const [customer] = await db.select().from(customers).where(eq(customers.id, id));
-      return customer;
+      return undefined;
     }
   }
 
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
     try {
-      // First create in PostgreSQL to get a unique ID
-      const [newCustomer] = await db.insert(customers).values(customer).returning();
-      
-      // Now with the ID, create in Supabase
       // Transform to snake_case for Supabase
       const supabaseCustomer = {
-        id: newCustomer.id, // Use the same ID
-        user_id: newCustomer.userId,
-        name: newCustomer.name,
-        email: newCustomer.email,
-        phone: newCustomer.phone,
-        gstin: newCustomer.gstin,
-        billing_address: newCustomer.billingAddress,
-        billing_city: newCustomer.billingCity,
-        billing_state: newCustomer.billingState,
-        billing_pincode: newCustomer.billingPincode,
-        shipping_address: newCustomer.shippingAddress,
-        shipping_city: newCustomer.shippingCity,
-        shipping_state: newCustomer.shippingState,
-        shipping_pincode: newCustomer.shippingPincode,
-        same_as_shipping: newCustomer.sameAsShipping
+        user_id: customer.userId,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        gstin: customer.gstin,
+        billing_address: customer.billingAddress,
+        billing_city: customer.billingCity,
+        billing_state: customer.billingState,
+        billing_pincode: customer.billingPincode,
+        shipping_address: customer.shippingAddress,
+        shipping_city: customer.shippingCity,
+        shipping_state: customer.shippingState,
+        shipping_pincode: customer.shippingPincode,
+        same_as_shipping: customer.sameAsShipping
       };
       
       // Insert using Supabase
@@ -284,8 +471,7 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase customer insert error:", error);
-        // Already created in PostgreSQL, so return that
-        return newCustomer;
+        throw error;
       }
       
       // Transform back to camelCase
@@ -308,56 +494,41 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error creating customer:", error);
-      // Try direct DB insert as last resort
-      const [newCustomer] = await db.insert(customers).values(customer).returning();
-      return newCustomer;
+      throw error;
     }
   }
 
   async updateCustomer(id: number, customer: Partial<InsertCustomer>): Promise<Customer | undefined> {
     try {
-      // First update in PostgreSQL
-      const [updatedCustomer] = await db
-        .update(customers)
-        .set(customer)
-        .where(eq(customers.id, id))
-        .returning();
+      // Convert partial customer from camelCase to snake_case
+      const supabaseCustomer: Record<string, any> = {};
       
-      if (!updatedCustomer) {
-        return undefined;
-      }
+      if ('userId' in customer) supabaseCustomer.user_id = customer.userId;
+      if ('name' in customer) supabaseCustomer.name = customer.name;
+      if ('email' in customer) supabaseCustomer.email = customer.email;
+      if ('phone' in customer) supabaseCustomer.phone = customer.phone;
+      if ('gstin' in customer) supabaseCustomer.gstin = customer.gstin;
+      if ('billingAddress' in customer) supabaseCustomer.billing_address = customer.billingAddress;
+      if ('billingCity' in customer) supabaseCustomer.billing_city = customer.billingCity;
+      if ('billingState' in customer) supabaseCustomer.billing_state = customer.billingState;
+      if ('billingPincode' in customer) supabaseCustomer.billing_pincode = customer.billingPincode;
+      if ('shippingAddress' in customer) supabaseCustomer.shipping_address = customer.shippingAddress;
+      if ('shippingCity' in customer) supabaseCustomer.shipping_city = customer.shippingCity;
+      if ('shippingState' in customer) supabaseCustomer.shipping_state = customer.shippingState;
+      if ('shippingPincode' in customer) supabaseCustomer.shipping_pincode = customer.shippingPincode;
+      if ('sameAsShipping' in customer) supabaseCustomer.same_as_shipping = customer.sameAsShipping;
       
-      // Then update in Supabase using upsert
-      // Transform to snake_case for Supabase
-      const supabaseCustomer = {
-        id: updatedCustomer.id,
-        user_id: updatedCustomer.userId,
-        name: updatedCustomer.name,
-        email: updatedCustomer.email,
-        phone: updatedCustomer.phone,
-        gstin: updatedCustomer.gstin,
-        billing_address: updatedCustomer.billingAddress,
-        billing_city: updatedCustomer.billingCity,
-        billing_state: updatedCustomer.billingState,
-        billing_pincode: updatedCustomer.billingPincode,
-        shipping_address: updatedCustomer.shippingAddress,
-        shipping_city: updatedCustomer.shippingCity,
-        shipping_state: updatedCustomer.shippingState,
-        shipping_pincode: updatedCustomer.shippingPincode,
-        same_as_shipping: updatedCustomer.sameAsShipping
-      };
-      
-      // Update using Supabase (use upsert in case it doesn't exist in Supabase yet)
+      // Update using Supabase
       const { data, error } = await supabase
         .from('customers')
-        .upsert(supabaseCustomer)
+        .update(supabaseCustomer)
+        .eq('id', id)
         .select()
         .single();
         
       if (error) {
         console.error("Supabase customer update error:", error);
-        // Already updated in PostgreSQL, so return that
-        return updatedCustomer;
+        return undefined;
       }
       
       // Transform back to camelCase
@@ -380,47 +551,31 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error updating customer:", error);
-      // Fall back to direct DB update
-      const [updatedCustomer] = await db.update(customers).set(customer).where(eq(customers.id, id)).returning();
-      return updatedCustomer;
+      return undefined;
     }
   }
 
   async deleteCustomer(id: number): Promise<boolean> {
     try {
-      // First delete from PostgreSQL
-      const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
-      
-      if (!deletedCustomer) {
-        return false;
-      }
-      
-      // Then delete from Supabase
-      const { error } = await supabase.from('customers').delete().eq('id', id);
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', id);
         
       if (error) {
         console.error("Supabase customer delete error:", error);
-        // Already deleted from PostgreSQL, so consider it a success
-        return true;
+        return false;
       }
       
       return true;
     } catch (error) {
       console.error("Error deleting customer:", error);
-      // Try direct DB delete as last resort
-      try {
-        const [deletedCustomer] = await db.delete(customers).where(eq(customers.id, id)).returning();
-        return !!deletedCustomer;
-      } catch (dbError) {
-        console.error("PostgreSQL delete error:", dbError);
-        return false;
-      }
+      return false;
     }
   }
 
   async getProductsByUserId(userId: number): Promise<Product[]> {
     try {
-      // Try using Supabase first
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -428,8 +583,7 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase product fetch error:", error);
-        // Fall back to direct DB query
-        return db.select().from(products).where(eq(products.userId, userId));
+        return [];
       }
       
       // Transform Supabase snake_case to camelCase
@@ -445,14 +599,12 @@ export class DatabaseStorage implements IStorage {
       }));
     } catch (error) {
       console.error("Error fetching products:", error);
-      // Fall back to direct DB query
-      return db.select().from(products).where(eq(products.userId, userId));
+      return [];
     }
   }
 
   async getProduct(id: number): Promise<Product | undefined> {
     try {
-      // Try using Supabase first
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -461,9 +613,7 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase product fetch error:", error);
-        // Fall back to direct DB query
-        const [product] = await db.select().from(products).where(eq(products.id, id));
-        return product;
+        return undefined;
       }
       
       if (!data) return undefined;
@@ -481,31 +631,24 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error fetching product:", error);
-      // Fall back to direct DB query
-      const [product] = await db.select().from(products).where(eq(products.id, id));
-      return product;
+      return undefined;
     }
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
     try {
-      // First create the product in PostgreSQL to get a unique ID
-      const [newProduct] = await db.insert(products).values(product).returning();
-      
-      // Now with the assigned ID, create in Supabase
       // Transform to snake_case for Supabase
       const supabaseProduct = {
-        id: newProduct.id, // Use the same ID
-        user_id: newProduct.userId,
-        name: newProduct.name,
-        description: newProduct.description,
-        hsn_code: newProduct.hsnCode,
-        unit: newProduct.unit,
-        rate: newProduct.rate,
-        gst_rate: newProduct.gstRate
+        user_id: product.userId,
+        name: product.name,
+        description: product.description,
+        hsn_code: product.hsnCode,
+        unit: product.unit,
+        rate: product.rate,
+        gst_rate: product.gstRate
       };
       
-      // Insert using Supabase with the same ID
+      // Insert using Supabase
       const { data, error } = await supabase
         .from('products')
         .insert(supabaseProduct)
@@ -514,11 +657,10 @@ export class DatabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase product insert error:", error);
-        // Already created in PostgreSQL, so we can return that
-        return newProduct;
+        throw error;
       }
       
-      // Transform back to camelCase (though should be same as newProduct)
+      // Transform back to camelCase
       return {
         id: data.id,
         userId: data.user_id,
@@ -531,51 +673,37 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error creating product:", error);
-      // Try direct DB insert as last resort
-      const [newProduct] = await db.insert(products).values(product).returning();
-      return newProduct;
+      throw error;
     }
   }
 
   async updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined> {
     try {
-      // First update the product in PostgreSQL
-      const [updatedProduct] = await db
-        .update(products)
-        .set(product)
-        .where(eq(products.id, id))
-        .returning();
+      // Convert partial product from camelCase to snake_case
+      const supabaseProduct: Record<string, any> = {};
       
-      if (!updatedProduct) {
-        return undefined;
-      }
+      if ('userId' in product) supabaseProduct.user_id = product.userId;
+      if ('name' in product) supabaseProduct.name = product.name;
+      if ('description' in product) supabaseProduct.description = product.description;
+      if ('hsnCode' in product) supabaseProduct.hsn_code = product.hsnCode;
+      if ('unit' in product) supabaseProduct.unit = product.unit;
+      if ('rate' in product) supabaseProduct.rate = product.rate;
+      if ('gstRate' in product) supabaseProduct.gst_rate = product.gstRate;
       
-      // Transform to snake_case for Supabase
-      const supabaseProduct: Record<string, any> = {
-        id: updatedProduct.id,
-        user_id: updatedProduct.userId,
-        name: updatedProduct.name,
-        description: updatedProduct.description,
-        hsn_code: updatedProduct.hsnCode,
-        unit: updatedProduct.unit,
-        rate: updatedProduct.rate,
-        gst_rate: updatedProduct.gstRate
-      };
-      
-      // Update using Supabase (use upsert in case it doesn't exist in Supabase yet)
+      // Update using Supabase
       const { data, error } = await supabase
         .from('products')
-        .upsert(supabaseProduct)
+        .update(supabaseProduct)
+        .eq('id', id)
         .select()
         .single();
         
       if (error) {
         console.error("Supabase product update error:", error);
-        // Already updated in PostgreSQL, so return that
-        return updatedProduct;
+        return undefined;
       }
       
-      // Transform back to camelCase (though should be same as updatedProduct)
+      // Transform back to camelCase
       return {
         id: data.id,
         userId: data.user_id,
@@ -588,41 +716,26 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error updating product:", error);
-      // Fall back to direct DB update
-      const [updatedProduct] = await db.update(products).set(product).where(eq(products.id, id)).returning();
-      return updatedProduct;
+      return undefined;
     }
   }
 
   async deleteProduct(id: number): Promise<boolean> {
     try {
-      // First delete from PostgreSQL
-      const [deletedProduct] = await db.delete(products).where(eq(products.id, id)).returning();
-      
-      if (!deletedProduct) {
-        return false;
-      }
-      
-      // Then delete from Supabase
-      const { error } = await supabase.from('products').delete().eq('id', id);
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
         
       if (error) {
         console.error("Supabase product delete error:", error);
-        // Already deleted from PostgreSQL, so consider it a success
-        return true;
+        return false;
       }
       
       return true;
     } catch (error) {
       console.error("Error deleting product:", error);
-      // Try direct DB delete as last resort
-      try {
-        const [deletedProduct] = await db.delete(products).where(eq(products.id, id)).returning();
-        return !!deletedProduct;
-      } catch (dbError) {
-        console.error("PostgreSQL delete error:", dbError);
-        return false;
-      }
+      return false;
     }
   }
 
@@ -755,4 +868,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new SupabaseStorage();
