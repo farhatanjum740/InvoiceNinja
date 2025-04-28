@@ -9,8 +9,6 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name"),
-  fullName: text("full_name"),
-  supabaseId: text("supabase_id").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -19,8 +17,6 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,
   name: true,
-  fullName: true,
-  supabaseId: true,
 });
 
 // Company Details

@@ -17,7 +17,7 @@ export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   username: z.string().min(3),
-  fullName: z.string().optional(),
+  name: z.string().optional(),
   confirmPassword: z.string()
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
@@ -111,7 +111,7 @@ export async function setupAuth(app: Express) {
           options: {
             data: {
               username: validatedData.username,
-              full_name: validatedData.fullName
+              name: validatedData.name
             }
           }
         });
@@ -121,16 +121,12 @@ export async function setupAuth(app: Express) {
           return res.status(400).json({ message: error.message });
         }
         
-        // Get Supabase user ID
-        const supabaseUserId = authData.user?.id;
-        
         // Create user in our database
         const user = await storage.createUser({
           username: validatedData.username,
           password: validatedData.password, // This will be hashed before saving
           email: validatedData.email,
-          name: validatedData.fullName || "",
-          supabaseId: supabaseUserId || null
+          name: validatedData.name || ""
         });
         
         // Set session
@@ -147,8 +143,7 @@ export async function setupAuth(app: Express) {
           username: validatedData.username,
           password: validatedData.password,
           email: validatedData.email,
-          name: validatedData.fullName || "",
-          supabaseId: null
+          name: validatedData.name || ""
         });
         
         // Set session
@@ -189,20 +184,18 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Invalid username or password" });
       }
       
-      // Try to sign in with Supabase if user has supabaseId
-      if (user.supabaseId && user.email) {
-        try {
-          const { error } = await supabase.auth.signInWithPassword({
-            email: user.email,
-            password: validatedData.password
-          });
-          
-          if (error) {
-            console.error("Supabase login error:", error);
-          }
-        } catch (supabaseError) {
-          console.error("Supabase login error:", supabaseError);
+      // Try to sign in with Supabase using email
+      try {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: validatedData.password
+        });
+        
+        if (error) {
+          console.error("Supabase login error:", error);
         }
+      } catch (supabaseError) {
+        console.error("Supabase login error:", supabaseError);
       }
       
       // Set session
