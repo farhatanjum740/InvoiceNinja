@@ -70,7 +70,27 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
   const createProductMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertProductSchema>) => {
       const response = await apiRequest("POST", "/api/products", data);
-      return await response.json();
+      
+      // Check if response is valid JSON
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const jsonData = await response.json();
+        
+        // If the response includes an error message, throw it so onError can handle it
+        if (!response.ok && jsonData.error) {
+          const errorMessage = jsonData.details || jsonData.error;
+          throw new Error(errorMessage);
+        }
+        
+        return jsonData;
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(text || "Server error occurred");
+        }
+        return text;
+      }
     },
     onSuccess: () => {
       toast({
@@ -80,10 +100,22 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
       form.reset();
       if (onSuccess) onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // Try to parse error message if it's JSON
+      let errorMessage = error.message || "Failed to create product. Please try again.";
+      
+      try {
+        if (typeof errorMessage === "string" && errorMessage.includes('"error":')) {
+          const errorObj = JSON.parse(errorMessage);
+          errorMessage = errorObj.details || errorObj.error || errorMessage;
+        }
+      } catch (e) {
+        // If parsing fails, use the original error message
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to create product. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -93,7 +125,27 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
   const updateProductMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertProductSchema>) => {
       const response = await apiRequest("PUT", `/api/products/${product.id}`, data);
-      return await response.json();
+      
+      // Check if response is valid JSON
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const jsonData = await response.json();
+        
+        // If the response includes an error message, throw it so onError can handle it
+        if (!response.ok && jsonData.error) {
+          const errorMessage = jsonData.details || jsonData.error;
+          throw new Error(errorMessage);
+        }
+        
+        return jsonData;
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(text || "Server error occurred");
+        }
+        return text;
+      }
     },
     onSuccess: () => {
       toast({
@@ -102,10 +154,22 @@ export function ProductForm({ product, onSuccess }: ProductFormProps) {
       });
       if (onSuccess) onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // Try to parse error message if it's JSON
+      let errorMessage = error.message || "Failed to update product. Please try again.";
+      
+      try {
+        if (typeof errorMessage === "string" && errorMessage.includes('"error":')) {
+          const errorObj = JSON.parse(errorMessage);
+          errorMessage = errorObj.details || errorObj.error || errorMessage;
+        }
+      } catch (e) {
+        // If parsing fails, use the original error message
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to update product. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     },

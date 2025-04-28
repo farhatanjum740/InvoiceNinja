@@ -274,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/products/:id", async (req: Request, res: Response) => {
+  app.put("/api/products/:id", async (req: Request, res: Response) => {
     if (!req.user?.id) {
       return res.status(401).json({ error: "Unauthorized" });
     }
