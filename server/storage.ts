@@ -1078,6 +1078,15 @@ export class SupabaseStorage implements IStorage {
 
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
     try {
+      // Reset sequences first to avoid conflicts
+      try {
+        // Reset the invoices ID sequence to avoid duplicate key errors
+        await supabase.rpc('reset_invoices_sequence');
+        console.log("Reset invoices sequence successfully");
+      } catch (seqError) {
+        console.error("Failed to reset invoices sequence:", seqError);
+      }
+
       // Transform invoice to snake_case for Supabase
       // Omit any ID fields to let Supabase auto-generate them
       const supabaseInvoice = {
