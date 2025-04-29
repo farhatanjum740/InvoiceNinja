@@ -751,13 +751,17 @@ export class SupabaseStorage implements IStorage {
         status: invoice.status,
         notes: invoice.notes,
         termsAndConditions: invoice.terms_and_conditions,
-        totalAmount: invoice.total_amount,
-        subtotal: invoice.subtotal,
-        totalGst: invoice.total_gst,
-        cgst: invoice.cgst,
-        sgst: invoice.sgst,
-        igst: invoice.igst,
-        shippingCost: invoice.shipping_cost
+        totalAmount: parseFloat(invoice.total || '0'),
+        subtotal: parseFloat(invoice.subtotal || '0'),
+        totalGst: (parseFloat(invoice.cgst || '0') + 
+                  parseFloat(invoice.sgst || '0') + 
+                  parseFloat(invoice.igst || '0')),
+        cgst: parseFloat(invoice.cgst || '0'),
+        sgst: parseFloat(invoice.sgst || '0'),
+        igst: parseFloat(invoice.igst || '0'),
+        shippingCost: 0,
+        templateId: invoice.template_id,
+        colorTheme: invoice.color_theme
       }));
     } catch (error) {
       console.error("Error in getInvoicesByUserId:", error);
@@ -778,6 +782,7 @@ export class SupabaseStorage implements IStorage {
         return undefined;
       }
       
+      // Map the database fields to our Invoice type
       return {
         id: data.id,
         userId: data.user_id,
@@ -788,13 +793,20 @@ export class SupabaseStorage implements IStorage {
         status: data.status,
         notes: data.notes,
         termsAndConditions: data.terms_and_conditions,
-        totalAmount: data.total_amount,
-        subtotal: data.subtotal,
-        totalGst: data.total_gst,
-        cgst: data.cgst,
-        sgst: data.sgst,
-        igst: data.igst,
-        shippingCost: data.shipping_cost
+        totalAmount: parseFloat(data.total || '0'),
+        subtotal: parseFloat(data.subtotal || '0'),
+        // Calculate total GST from the sum of CGST, SGST, IGST if present
+        totalGst: (parseFloat(data.cgst || '0') + 
+                  parseFloat(data.sgst || '0') + 
+                  parseFloat(data.igst || '0')),
+        cgst: parseFloat(data.cgst || '0'),
+        sgst: parseFloat(data.sgst || '0'),
+        igst: parseFloat(data.igst || '0'),
+        // We don't have shippingCost in the schema, so default to 0
+        shippingCost: 0,
+        // Add the schema fields we need to include
+        templateId: data.template_id,
+        colorTheme: data.color_theme
       };
     } catch (error) {
       console.error("Error in getInvoice:", error);
@@ -819,66 +831,19 @@ export class SupabaseStorage implements IStorage {
   }
   
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
-    // Use Supabase's built-in PostgreSQL transaction
-    const { data, error } = await supabase.rpc('create_invoice_with_items', {
-      invoice_data: {
-        user_id: invoice.userId,
-        customer_id: invoice.customerId,
-        invoice_number: invoice.invoiceNumber,
-        invoice_date: invoice.invoiceDate,
-        due_date: invoice.dueDate || null,
-        status: invoice.status || 'DRAFT',
-        notes: invoice.notes || null,
-        terms_and_conditions: invoice.termsAndConditions || null,
-        total_amount: invoice.totalAmount || 0,
-        subtotal: invoice.subtotal || 0,
-        total_gst: invoice.totalGst || 0,
-        cgst: invoice.cgst || 0,
-        sgst: invoice.sgst || 0,
-        igst: invoice.igst || 0,
-        shipping_cost: invoice.shippingCost || 0
-      },
-      items_data: items.map(item => ({
-        description: item.description,
-        hsn_code: item.hsnCode || null,
-        quantity: item.quantity,
-        rate: item.rate,
-        gst_rate: item.gstRate,
-        amount: item.amount,
-        unit: item.unit || 'Piece',
-        product_id: item.productId || null
-      }))
-    });
-    
-    if (error) {
-      console.error("Transaction error during invoice creation:", error);
-      
-      // Fallback method if the RPC function isn't working
-      try {
-        console.log("Attempting fallback method for invoice creation...");
-        return await this.createInvoiceFallback(invoice, items);
-      } catch (fallbackError) {
-        console.error("Fallback invoice creation failed too:", fallbackError);
-        throw fallbackError;
-      }
+    try {
+      // Directly use the fallback method since we know RPC isn't available
+      return await this.createInvoiceFallback(invoice, items);
+    } catch (error) {
+      console.error("Invoice creation failed:", error);
+      throw error;
     }
-    
-    if (!data || !data.invoice_id) {
-      throw new Error("Failed to create invoice - no ID returned");
-    }
-    
-    const newInvoice = await this.getInvoice(data.invoice_id);
-    if (!newInvoice) {
-      throw new Error("Failed to retrieve created invoice");
-    }
-    
-    return newInvoice;
   }
   
-  // Fallback method for invoice creation with manual transaction
+  // Manual transaction for invoice creation
   private async createInvoiceFallback(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
     try {
-      // Start by inserting the invoice
+      // Start by inserting the invoice with only the fields that exist in the schema
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
@@ -890,13 +855,13 @@ export class SupabaseStorage implements IStorage {
           status: invoice.status || 'DRAFT',
           notes: invoice.notes || null,
           terms_and_conditions: invoice.termsAndConditions || null,
-          total_amount: invoice.totalAmount || 0,
-          subtotal: invoice.subtotal || 0,
-          total_gst: invoice.totalGst || 0,
-          cgst: invoice.cgst || 0,
-          sgst: invoice.sgst || 0,
-          igst: invoice.igst || 0,
-          shipping_cost: invoice.shippingCost || 0
+          total: invoice.totalAmount ? invoice.totalAmount.toString() : '0',
+          subtotal: invoice.subtotal ? invoice.subtotal.toString() : '0',
+          cgst: invoice.cgst ? invoice.cgst.toString() : null,
+          sgst: invoice.sgst ? invoice.sgst.toString() : null,
+          igst: invoice.igst ? invoice.igst.toString() : null,
+          color_theme: null,
+          template_id: null
         })
         .select()
         .single();
@@ -948,13 +913,17 @@ export class SupabaseStorage implements IStorage {
         status: invoiceData.status,
         notes: invoiceData.notes,
         termsAndConditions: invoiceData.terms_and_conditions,
-        totalAmount: invoiceData.total_amount,
-        subtotal: invoiceData.subtotal,
-        totalGst: invoiceData.total_gst,
-        cgst: invoiceData.cgst,
-        sgst: invoiceData.sgst,
-        igst: invoiceData.igst,
-        shippingCost: invoiceData.shipping_cost
+        totalAmount: parseFloat(invoiceData.total || '0'),
+        subtotal: parseFloat(invoiceData.subtotal || '0'),
+        totalGst: (parseFloat(invoiceData.cgst || '0') + 
+                  parseFloat(invoiceData.sgst || '0') + 
+                  parseFloat(invoiceData.igst || '0')),
+        cgst: parseFloat(invoiceData.cgst || '0'),
+        sgst: parseFloat(invoiceData.sgst || '0'),
+        igst: parseFloat(invoiceData.igst || '0'),
+        shippingCost: 0,
+        templateId: invoiceData.template_id,
+        colorTheme: invoiceData.color_theme
       };
     } catch (error) {
       console.error("Error in createInvoiceFallback:", error);
@@ -973,13 +942,11 @@ export class SupabaseStorage implements IStorage {
       if (invoice.status !== undefined) updateData.status = invoice.status;
       if (invoice.notes !== undefined) updateData.notes = invoice.notes;
       if (invoice.termsAndConditions !== undefined) updateData.terms_and_conditions = invoice.termsAndConditions;
-      if (invoice.totalAmount !== undefined) updateData.total_amount = invoice.totalAmount;
-      if (invoice.subtotal !== undefined) updateData.subtotal = invoice.subtotal;
-      if (invoice.totalGst !== undefined) updateData.total_gst = invoice.totalGst;
-      if (invoice.cgst !== undefined) updateData.cgst = invoice.cgst;
-      if (invoice.sgst !== undefined) updateData.sgst = invoice.sgst;
-      if (invoice.igst !== undefined) updateData.igst = invoice.igst;
-      if (invoice.shippingCost !== undefined) updateData.shipping_cost = invoice.shippingCost;
+      if (invoice.totalAmount !== undefined) updateData.total = invoice.totalAmount.toString();
+      if (invoice.subtotal !== undefined) updateData.subtotal = invoice.subtotal.toString();
+      if (invoice.cgst !== undefined) updateData.cgst = invoice.cgst.toString();
+      if (invoice.sgst !== undefined) updateData.sgst = invoice.sgst.toString();
+      if (invoice.igst !== undefined) updateData.igst = invoice.igst.toString();
       
       const { data, error } = await supabase
         .from('invoices')
@@ -1003,13 +970,17 @@ export class SupabaseStorage implements IStorage {
         status: data.status,
         notes: data.notes,
         termsAndConditions: data.terms_and_conditions,
-        totalAmount: data.total_amount,
-        subtotal: data.subtotal,
-        totalGst: data.total_gst,
-        cgst: data.cgst,
-        sgst: data.sgst,
-        igst: data.igst,
-        shippingCost: data.shipping_cost
+        totalAmount: parseFloat(data.total || '0'),
+        subtotal: parseFloat(data.subtotal || '0'),
+        totalGst: (parseFloat(data.cgst || '0') + 
+                  parseFloat(data.sgst || '0') + 
+                  parseFloat(data.igst || '0')),
+        cgst: parseFloat(data.cgst || '0'),
+        sgst: parseFloat(data.sgst || '0'),
+        igst: parseFloat(data.igst || '0'),
+        shippingCost: 0,
+        templateId: data.template_id,
+        colorTheme: data.color_theme
       };
     } catch (error) {
       console.error("Error in updateInvoice:", error);
@@ -1197,7 +1168,7 @@ export class SupabaseStorage implements IStorage {
       // Get all invoices for this user
       const { data: invoices, error: invoiceError } = await supabase
         .from('invoices')
-        .select('id, total_amount, status')
+        .select('id, total, status')
         .eq('user_id', userId);
       
       if (invoiceError) {
@@ -1222,7 +1193,7 @@ export class SupabaseStorage implements IStorage {
       
       // Calculate statistics
       const totalInvoices = invoices?.length || 0;
-      const totalRevenue = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
+      const totalRevenue = invoices?.reduce((sum, inv) => sum + parseFloat(inv.total || '0'), 0) || 0;
       const unpaidInvoices = invoices?.filter(inv => inv.status === 'PENDING' || inv.status === 'OVERDUE').length || 0;
       
       return {
