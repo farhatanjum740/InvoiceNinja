@@ -200,7 +200,7 @@ export default function InvoicesPage() {
                     <tr>
                       <td>${item.description}</td>
                       <td>${item.hsnCode}</td>
-                      <td>${parseFloat(String(item.quantity)).toLocaleString('en-IN')}</td>
+                      <td>${parseFloat(String(item.quantity)).toLocaleString('en-IN')} ${item.unit || 'Piece'}</td>
                       <td>₹${parseFloat(String(item.rate)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td>${item.gstRate}%</td>
                       <td>₹${parseFloat(String(item.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -234,7 +234,7 @@ export default function InvoicesPage() {
                 ` : ''}
                 <div class="summary-row total-row">
                   <div class="summary-title">Total:</div>
-                  <div>₹${parseFloat(completeData.invoice.total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div>₹${parseFloat(completeData.invoice.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </div>
               </div>
             </div>
@@ -330,8 +330,8 @@ export default function InvoicesPage() {
             <div style="width: 48%;">
               <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">From</div>
               <div>${completeData.company.name}</div>
-              <div>${completeData.company.address}</div>
-              <div>${completeData.company.city}, ${completeData.company.state} ${completeData.company.zipCode}</div>
+              <div>${completeData.company.address || ''}</div>
+              <div>${completeData.company.city || ''}, ${completeData.company.state || ''} ${completeData.company.pincode || ''}</div>
               <div>GSTIN: ${completeData.company.gstin || 'N/A'}</div>
               <div>Phone: ${completeData.company.phone || 'N/A'}</div>
               <div>Email: ${completeData.company.email || 'N/A'}</div>
@@ -340,8 +340,8 @@ export default function InvoicesPage() {
             <div style="width: 48%;">
               <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Bill To</div>
               <div>${completeData.customer.name}</div>
-              <div>${completeData.customer.billingAddress}</div>
-              <div>${completeData.customer.billingCity}, ${completeData.customer.billingState} ${completeData.customer.billingZipCode}</div>
+              <div>${completeData.customer.billingAddress || ''}</div>
+              <div>${completeData.customer.billingCity || ''}, ${completeData.customer.billingState || ''} ${completeData.customer.billingPincode || ''}</div>
               <div>GSTIN: ${completeData.customer.gstin || 'N/A'}</div>
               <div>Phone: ${completeData.customer.phone || 'N/A'}</div>
               <div>Email: ${completeData.customer.email || 'N/A'}</div>
@@ -408,7 +408,7 @@ export default function InvoicesPage() {
             ` : ''}
             <div style="display: flex; justify-content: space-between; padding: 5px 0; font-weight: bold; border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;">
               <div>Total:</div>
-              <div>₹${parseFloat(completeData.invoice.total).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div>₹${parseFloat(completeData.invoice.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           </div>
           
