@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { calculateGST } from "@/lib/utils/gst-calculations";
-import { formatCurrency } from "@/lib/utils/formatting";
+import { formatCurrency, amountToWords } from "@/lib/utils/formatting";
 import { InvoiceItemForm } from "./invoice-item-form";
 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -62,6 +62,7 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [subtotal, setSubtotal] = useState(0);
   const [gstTotals, setGstTotals] = useState({ cgst: 0, sgst: 0, igst: 0 });
+  const [roundOff, setRoundOff] = useState(0);
   const [total, setTotal] = useState(0);
   const [isGeneratingInvoiceNumber, setIsGeneratingInvoiceNumber] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState("standard");
@@ -207,13 +208,19 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
 
         // Calculate total (subtotal + all taxes)
         const calculatedTotal = roundedSubtotal + validatedGst.cgst + validatedGst.sgst + validatedGst.igst;
-        const roundedTotal = parseFloat(calculatedTotal.toFixed(2)) || 0;
-        setTotal(roundedTotal);
+        
+        // Calculate round-off adjustment to nearest integer
+        const integerTotal = Math.round(calculatedTotal);
+        const roundOffValue = parseFloat((integerTotal - calculatedTotal).toFixed(2));
+        
+        setRoundOff(roundOffValue);
+        setTotal(integerTotal);
         
         console.log("Calculated values:", {
           subtotal: roundedSubtotal,
           gst: validatedGst,
-          total: roundedTotal
+          roundOff: roundOffValue,
+          total: integerTotal
         });
       } catch (error) {
         console.error("Error calculating invoice totals:", error);
@@ -337,8 +344,10 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         cgst: gstTotals.cgst,
         sgst: gstTotals.sgst,
         igst: gstTotals.igst,
+        roundOff: roundOff,
         total,
         totalAmount: total, // Add totalAmount for backend compatibility
+        amountInWords: amountToWords(total), // Add total in words
         customerName: selectedCustomer?.name || "",
         templateId: selectedTemplate,
         colorTheme: selectedColor
@@ -391,7 +400,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         cgst: gstTotals.cgst !== null && gstTotals.cgst !== undefined ? gstTotals.cgst.toString() : '0.00',
         sgst: gstTotals.sgst !== null && gstTotals.sgst !== undefined ? gstTotals.sgst.toString() : '0.00', 
         igst: gstTotals.igst !== null && gstTotals.igst !== undefined ? gstTotals.igst.toString() : '0.00',
+        roundOff: roundOff.toString(),
         total: total.toString(),
+        amountInWords: amountToWords(total),
         totalAmount: total.toString() // Add this for backend compatibility
       },
       items: invoiceItems.map(item => ({
