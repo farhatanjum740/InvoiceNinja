@@ -21,20 +21,22 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [paperSize, setPaperSize] = useState<keyof typeof PAPER_SIZES>('A4');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [progressStep, setProgressStep] = useState<string>('');
   const invoiceRef = useRef<HTMLDivElement>(null);
   
   const generatePDF = async () => {
     if (!invoiceRef.current) return;
     
     setIsGenerating(true);
-    
     setErrorMessage(null);
+    setProgressStep('Starting PDF generation...');
     
     try {
       const invoiceElement = invoiceRef.current;
       
       // Start progress indicator
       console.log("Generating PDF: Preparing invoice for conversion");
+      setProgressStep('Rendering invoice content...');
       
       // Better rendering with higher quality and support for logos
       const canvas = await html2canvas(invoiceElement, {
@@ -57,6 +59,7 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       const imgData = canvas.toDataURL("image/jpeg", 0.8);
       
       // Get selected paper dimensions
+      setProgressStep('Creating PDF document...');
       const selectedPaperSize = PAPER_SIZES[paperSize];
       console.log(`Using ${paperSize} paper size: ${selectedPaperSize.width}mm x ${selectedPaperSize.height}mm`);
       
@@ -121,6 +124,7 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
         
         // Add enhanced headers and footers for continuation pages
         if (totalPages > 1) {
+          setProgressStep(`Creating multi-page invoice (${totalPages} pages)...`);
           console.log(`Multi-page invoice detected: ${totalPages} pages`);
           
           // Get invoice and company details for headers
@@ -157,10 +161,13 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       }
       
       // Generate invoice number-based filename
+      setProgressStep('Saving PDF...');
       const invoiceNumber = invoice.invoice.invoiceNumber || "invoice";
       const filename = `${invoiceNumber.replace(/[^\w-]/g, "-")}.pdf`;
       
       pdf.save(filename);
+      
+      setProgressStep('PDF downloaded successfully!');
     } catch (error) {
       console.error("Error generating PDF:", error);
       
@@ -185,6 +192,14 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
   
   return (
     <div className="space-y-6">
+      {/* Error Alert */}
+      {errorMessage && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
+      
       {/* PDF Export Options */}
       <div className="flex justify-between items-center">
         <div className="space-y-1">
@@ -221,7 +236,7 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
           {isGenerating ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Generating PDF...
+              {progressStep || 'Generating PDF...'}
             </>
           ) : (
             <>
