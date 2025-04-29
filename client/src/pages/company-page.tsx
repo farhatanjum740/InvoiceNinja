@@ -4,9 +4,69 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompanyForm } from "@/components/forms/company-form";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { InvoiceTemplateSelector } from "@/components/invoice/invoice-template-selector";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+
+// Template Settings Component
+function TemplateSettings({ company }: { company: any }) {
+  const { toast } = useToast();
+  const [selectedTemplate, setSelectedTemplate] = useState(company?.templateId || "standard");
+  const [selectedColor, setSelectedColor] = useState(company?.colorTheme || "blue");
+
+  // Update template mutation
+  const updateTemplateMutation = useMutation({
+    mutationFn: async (data: { templateId: string; colorTheme: string }) => {
+      const response = await apiRequest("PATCH", `/api/company`, data);
+      if (!response.ok) {
+        throw new Error("Failed to update template settings");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/company"] });
+      toast({
+        title: "Template settings updated",
+        description: "Your invoice template preferences have been saved.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update template settings",
+        description: error.message,
+      });
+    },
+  });
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    updateTemplateMutation.mutate({ templateId, colorTheme: selectedColor });
+  };
+
+  const handleColorSelect = (colorId: string) => {
+    setSelectedColor(colorId);
+    updateTemplateMutation.mutate({ templateId: selectedTemplate, colorTheme: colorId });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6">
+        <div>
+          <h3 className="font-medium mb-4">Select your default invoice template and color theme</h3>
+          <InvoiceTemplateSelector
+            selectedTemplate={selectedTemplate}
+            selectedColor={selectedColor}
+            onTemplateSelect={handleTemplateSelect}
+            onColorSelect={handleColorSelect}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function CompanyPage() {
   const [activeTab, setActiveTab] = useState("details");
@@ -41,10 +101,11 @@ export default function CompanyPage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsList className="grid w-full grid-cols-4 mb-6">
                 <TabsTrigger value="details">Company Details</TabsTrigger>
                 <TabsTrigger value="bank">Bank Details</TabsTrigger>
                 <TabsTrigger value="tax">Tax Information</TabsTrigger>
+                <TabsTrigger value="templates">Invoice Templates</TabsTrigger>
               </TabsList>
 
               {isLoading ? (
@@ -120,6 +181,20 @@ export default function CompanyPage() {
                             });
                           }}
                         />
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  <TabsContent value="templates">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Invoice Template Settings</CardTitle>
+                        <CardDescription>
+                          Choose your default invoice template and color theme
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <TemplateSettings company={company} />
                       </CardContent>
                     </Card>
                   </TabsContent>

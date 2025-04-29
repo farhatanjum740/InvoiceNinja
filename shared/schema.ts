@@ -35,6 +35,8 @@ export const companies = pgTable("companies", {
   accountNumber: text("account_number"),
   ifscCode: text("ifsc_code"),
   logo: text("logo"),
+  templateId: text("template_id").default("standard"),
+  colorTheme: text("color_theme").default("blue"),
 });
 
 export const insertCompanySchema = createInsertSchema(companies).omit({
