@@ -652,8 +652,9 @@ export function InvoiceTemplateRenderer({
                 
                 <div className={cn("px-4 py-3 flex justify-between items-center", selectedColor.bgColor, "text-white")}>
                   <span className="font-medium">Total:</span>
-                  <span className="text-lg font-bold">{typeof invoice.total === 'number' ? 
-                    formatCurrency(invoice.total) : invoice.total}</span>
+                  <span className="text-lg font-bold">
+                    {formatCurrency(getInvoiceTotal(invoice))}
+                  </span>
                 </div>
               </div>
             </div>
