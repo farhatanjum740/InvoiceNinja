@@ -96,6 +96,40 @@ export class SupabaseStorage implements IStorage {
     });
     
     console.log('Using PostgreSQL session store');
+    
+    // Attempt to reset sequences on startup to avoid ID conflicts
+    this.resetAllSequences().catch(err => {
+      console.warn('Failed to reset sequences on startup:', err.message || err);
+    });
+  }
+  
+  // Reset all table sequences to avoid ID conflicts between Neon and Supabase
+  private async resetAllSequences() {
+    try {
+      console.log('Resetting all table sequences to prevent ID conflicts...');
+      
+      // List of tables with ID sequences
+      const tables = ['users', 'companies', 'customers', 'products', 'invoices', 'invoice_items'];
+      
+      for (const table of tables) {
+        try {
+          // Find the max ID and add a safe buffer
+          const result = await pool.query(`SELECT COALESCE(MAX(id), 0) + 10 as max_id FROM ${table}`);
+          const maxId = result.rows[0].max_id;
+          
+          // Reset the sequence
+          await pool.query(`SELECT setval('${table}_id_seq', ${maxId}, true)`);
+          console.log(`Reset sequence for ${table} to ${maxId}`);
+        } catch (err) {
+          console.warn(`Failed to reset sequence for ${table}:`, err.message || err);
+        }
+      }
+      
+      console.log('All sequences have been reset successfully');
+    } catch (error) {
+      console.error('Error resetting sequences:', error);
+      throw error;
+    }
   }
   
   // User Management
@@ -480,6 +514,67 @@ export class SupabaseStorage implements IStorage {
     }
   }
   
+  // Helper function to forcefully create a record in Supabase and directly in the DB
+  private async forceCreateInBothDatabases<T>(
+    tableName: string,
+    data: Record<string, any>,
+    mapResultToType: (row: any) => T
+  ): Promise<T> {
+    console.log(`Force creating record in ${tableName} with synchronized ID`);
+    
+    // 1. First get the max ID from the database and add a buffer
+    const maxIdResult = await pool.query(`SELECT COALESCE(MAX(id), 0) + 10 as next_id FROM ${tableName}`);
+    const nextId = maxIdResult.rows[0].next_id;
+    console.log(`Using ID ${nextId} for new ${tableName} record`);
+    
+    // 2. Try to delete any record with this ID from both databases (cleanup)
+    try {
+      await pool.query(`DELETE FROM ${tableName} WHERE id = $1`, [nextId]);
+      await supabase.from(tableName).delete().eq('id', nextId);
+    } catch (cleanupError) {
+      console.warn(`Cleanup error (ignorable): ${cleanupError}`);
+    }
+    
+    // 3. Insert directly into the database with explicit ID
+    const columnNames = Object.keys(data).join(', ');
+    const placeholders = Object.keys(data).map((_, i) => `$${i + 2}`).join(', ');
+    
+    const insertSQL = `
+      INSERT INTO ${tableName} (id, ${columnNames}) 
+      VALUES ($1, ${placeholders}) 
+      RETURNING *
+    `;
+    
+    const params = [nextId, ...Object.values(data)];
+    
+    try {
+      const result = await pool.query(insertSQL, params);
+      
+      if (result.rows.length === 0) {
+        throw new Error(`Failed to insert record into ${tableName}`);
+      }
+      
+      // 4. Now insert the same data with the same ID into Supabase
+      const { error } = await supabase
+        .from(tableName)
+        .insert({ id: nextId, ...data });
+      
+      if (error) {
+        console.warn(`Supabase insert error: ${error.message}. Will try to force refresh cache.`);
+        // Try to force Supabase to see the new record
+        await syncDirectDatabaseChange(tableName);
+      } else {
+        console.log(`Successfully inserted record into both databases with ID: ${nextId}`);
+      }
+      
+      // 5. Return the mapped result
+      return mapResultToType(result.rows[0]);
+    } catch (error) {
+      console.error(`Error in forceCreateInBothDatabases for ${tableName}:`, error);
+      throw error;
+    }
+  }
+
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
     try {
       console.log("Creating customer with data:", { 
@@ -487,145 +582,46 @@ export class SupabaseStorage implements IStorage {
         userId: customer.userId 
       });
       
-      // REVERSED STRATEGY: First try Supabase API to ensure visibility in the Supabase UI
-      console.log("Attempting insert with Supabase Data API first");
-      try {
-        const { data: createdCustomer, error: insertError } = await supabase
-          .from('customers')
-          .insert({
-            name: customer.name,
-            user_id: customer.userId,
-            email: customer.email || null,
-            gstin: customer.gstin || null,
-            phone: customer.phone || null,
-            billing_address: customer.billingAddress || null,
-            billing_city: customer.billingCity || null,
-            billing_state: customer.billingState || null,
-            billing_pincode: customer.billingPincode || null,
-            shipping_address: customer.shippingAddress || null,
-            shipping_city: customer.shippingCity || null,
-            shipping_state: customer.shippingState || null,
-            shipping_pincode: customer.shippingPincode || null,
-            same_as_shipping: customer.sameAsShipping || false
-          })
-          .select()
-          .single();
-          
-        if (!insertError && createdCustomer) {
-          // If we reach here, the Supabase insert succeeded
-          console.log("Successfully created customer with Supabase API, ID:", createdCustomer.id);
-          return {
-            id: createdCustomer.id,
-            name: createdCustomer.name,
-            userId: createdCustomer.user_id,
-            email: createdCustomer.email,
-            gstin: createdCustomer.gstin,
-            phone: createdCustomer.phone,
-            billingAddress: createdCustomer.billing_address,
-            billingCity: createdCustomer.billing_city,
-            billingState: createdCustomer.billing_state,
-            billingPincode: createdCustomer.billing_pincode,
-            shippingAddress: createdCustomer.shipping_address,
-            shippingCity: createdCustomer.shipping_city,
-            shippingState: createdCustomer.shipping_state,
-            shippingPincode: createdCustomer.shipping_pincode,
-            sameAsShipping: createdCustomer.same_as_shipping
-          };
-        } else {
-          console.warn("Supabase insert failed, falling back to direct SQL:", insertError?.message);
-        }
-      } catch (supabaseError: any) {
-        console.warn("Supabase insert threw an error, falling back to direct SQL:", supabaseError.message || supabaseError);
-      }
+      // Prepare the data for insertion
+      const customerData = {
+        name: customer.name,
+        user_id: customer.userId,
+        email: customer.email || null,
+        gstin: customer.gstin || null,
+        phone: customer.phone || null,
+        billing_address: customer.billingAddress || null,
+        billing_city: customer.billingCity || null,
+        billing_state: customer.billingState || null,
+        billing_pincode: customer.billingPincode || null,
+        shipping_address: customer.shippingAddress || null,
+        shipping_city: customer.shippingCity || null,
+        shipping_state: customer.shippingState || null,
+        shipping_pincode: customer.shippingPincode || null,
+        same_as_shipping: customer.sameAsShipping || false
+      };
       
-      console.log("Falling back to direct SQL approach for customer creation");
-      
-      // First, manually set the sequence to a high enough value to avoid conflicts
-      try {
-        await pool.query("SELECT setval('customers_id_seq', (SELECT MAX(id) FROM customers) + 5, true)");
-        console.log("Successfully reset sequence for customers table");
-      } catch (seqError: any) {
-        console.warn("Failed to reset sequence:", seqError.message || seqError);
-      }
-      
-      // Generate a safe ID by adding a buffer to the current max ID
-      const maxIdResult = await pool.query('SELECT COALESCE(MAX(id), 0) + 10 as next_id FROM customers');
-      const nextId = maxIdResult.rows[0].next_id;
-      console.log("Using generated ID for customer insert:", nextId);
-      
-      const result = await pool.query(
-        `INSERT INTO customers (
-          id, name, user_id, email, gstin, phone, 
-          billing_address, billing_city, billing_state, billing_pincode,
-          shipping_address, shipping_city, shipping_state, shipping_pincode,
-          same_as_shipping
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
-        ) RETURNING *`,
-        [
-          nextId,
-          customer.name,
-          customer.userId,
-          customer.email || null,
-          customer.gstin || null,
-          customer.phone || null,
-          customer.billingAddress || null,
-          customer.billingCity || null,
-          customer.billingState || null,
-          customer.billingPincode || null,
-          customer.shippingAddress || null,
-          customer.shippingCity || null,
-          customer.shippingState || null,
-          customer.shippingPincode || null,
-          customer.sameAsShipping || false
-        ]
+      // Use the force create function to ensure consistency between Neon and Supabase
+      return this.forceCreateInBothDatabases<Customer>(
+        'customers',
+        customerData,
+        (row) => ({
+          id: row.id,
+          name: row.name,
+          userId: row.user_id,
+          email: row.email,
+          gstin: row.gstin,
+          phone: row.phone,
+          billingAddress: row.billing_address,
+          billingCity: row.billing_city,
+          billingState: row.billing_state,
+          billingPincode: row.billing_pincode,
+          shippingAddress: row.shipping_address,
+          shippingCity: row.shipping_city,
+          shippingState: row.shipping_state,
+          shippingPincode: row.shipping_pincode,
+          sameAsShipping: row.same_as_shipping
+        })
       );
-      
-      if (result.rows.length > 0) {
-        const newCustomer = result.rows[0];
-        console.log("Successfully created customer with direct SQL using ID:", nextId);
-        
-        // Try to sync this change with Supabase
-        console.log("Attempting to make this record visible in Supabase...");
-        try {
-          // Force the record to appear in Supabase by reading it through Supabase API
-          const { data, error } = await supabase
-            .from('customers')
-            .select('*')
-            .eq('id', nextId)
-            .single();
-            
-          if (!error && data) {
-            console.log("Successfully retrieved the new customer through Supabase API");
-          } else {
-            console.warn("Could not retrieve the new customer through Supabase, trying sync...");
-            await syncDirectDatabaseChange('customers');
-          }
-        } catch (syncError) {
-          console.error("Error syncing with Supabase:", syncError);
-        }
-        
-        return {
-          id: newCustomer.id,
-          name: newCustomer.name,
-          userId: newCustomer.user_id,
-          email: newCustomer.email,
-          gstin: newCustomer.gstin,
-          phone: newCustomer.phone,
-          billingAddress: newCustomer.billing_address,
-          billingCity: newCustomer.billing_city,
-          billingState: newCustomer.billing_state,
-          billingPincode: newCustomer.billing_pincode,
-          shippingAddress: newCustomer.shipping_address,
-          shippingCity: newCustomer.shipping_city,
-          shippingState: newCustomer.shipping_state,
-          shippingPincode: newCustomer.shipping_pincode,
-          sameAsShipping: newCustomer.same_as_shipping
-        };
-      }
-      
-      // If we get here, both approaches failed
-      throw new Error("Failed to create customer through both Supabase API and direct SQL");
     } catch (error: any) {
       console.error("Error in createCustomer:", error.message || error);
       throw error;
@@ -769,114 +765,32 @@ export class SupabaseStorage implements IStorage {
         userId: product.userId 
       });
       
-      // REVERSED STRATEGY: First try Supabase API to ensure visibility in the Supabase UI
-      console.log("Attempting insert with Supabase Data API first");
-      try {
-        const { data: createdProduct, error: insertError } = await supabase
-          .from('products')
-          .insert({
-            name: product.name,
-            user_id: product.userId,
-            description: product.description || null,
-            hsn_code: product.hsnCode || null,
-            unit: product.unit || 'Piece',
-            rate: product.rate || 0,
-            gst_rate: product.gstRate || 0
-          })
-          .select()
-          .single();
-          
-        if (!insertError && createdProduct) {
-          // If we reach here, the Supabase insert succeeded
-          console.log("Successfully created product with Supabase API, ID:", createdProduct.id);
-          return {
-            id: createdProduct.id,
-            name: createdProduct.name,
-            userId: createdProduct.user_id,
-            description: createdProduct.description,
-            hsnCode: createdProduct.hsn_code,
-            unit: createdProduct.unit,
-            rate: createdProduct.rate,
-            gstRate: createdProduct.gst_rate
-          };
-        } else {
-          console.warn("Supabase insert failed, falling back to direct SQL:", insertError?.message);
-        }
-      } catch (supabaseError: any) {
-        console.warn("Supabase insert threw an error, falling back to direct SQL:", supabaseError.message || supabaseError);
-      }
+      // Prepare the data for insertion
+      const productData = {
+        name: product.name,
+        user_id: product.userId,
+        description: product.description || null,
+        hsn_code: product.hsnCode || null,
+        unit: product.unit || 'Piece',
+        rate: product.rate || 0,
+        gst_rate: product.gstRate || 0
+      };
       
-      console.log("Falling back to direct SQL approach for product creation");
-      
-      // First, manually set the sequence to a high enough value to avoid conflicts
-      try {
-        await pool.query("SELECT setval('products_id_seq', (SELECT MAX(id) FROM products) + 5, true)");
-        console.log("Successfully reset sequence for products table");
-      } catch (seqError: any) {
-        console.warn("Failed to reset sequence:", seqError.message || seqError);
-      }
-      
-      // Generate a safe ID by adding a buffer to the current max ID
-      const maxIdResult = await pool.query('SELECT COALESCE(MAX(id), 0) + 10 as next_id FROM products');
-      const nextId = maxIdResult.rows[0].next_id;
-      console.log("Using generated ID for product insert:", nextId);
-      
-      const result = await pool.query(
-        `INSERT INTO products (
-          id, name, user_id, description, hsn_code, unit, rate, gst_rate
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8
-        ) RETURNING *`,
-        [
-          nextId,
-          product.name,
-          product.userId,
-          product.description || null,
-          product.hsnCode || null,
-          product.unit || 'Piece',
-          product.rate || 0,
-          product.gstRate || 0
-        ]
+      // Use the force create function to ensure consistency between Neon and Supabase
+      return this.forceCreateInBothDatabases<Product>(
+        'products',
+        productData,
+        (row) => ({
+          id: row.id,
+          name: row.name,
+          userId: row.user_id,
+          description: row.description,
+          hsnCode: row.hsn_code,
+          unit: row.unit,
+          rate: row.rate,
+          gstRate: row.gst_rate
+        })
       );
-      
-      if (result.rows.length > 0) {
-        const newProduct = result.rows[0];
-        console.log("Successfully created product with direct SQL using ID:", nextId);
-        
-        // Try to sync this change with Supabase
-        console.log("Attempting to make this record visible in Supabase...");
-        try {
-          // Force the record to appear in Supabase by reading it through Supabase API
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .eq('id', nextId)
-            .single();
-            
-          if (!error && data) {
-            console.log("Successfully retrieved the new product through Supabase API");
-          } else {
-            console.warn("Could not retrieve the new product through Supabase, trying sync...");
-            await syncDirectDatabaseChange('products');
-          }
-        } catch (syncError) {
-          console.error("Error syncing with Supabase:", syncError);
-        }
-        
-        return {
-          id: newProduct.id,
-          name: newProduct.name,
-          userId: newProduct.user_id,
-          description: newProduct.description,
-          hsnCode: newProduct.hsn_code,
-          unit: newProduct.unit,
-          rate: newProduct.rate,
-          gstRate: newProduct.gst_rate
-        };
-      }
-      
-      // If we get here, both approaches failed
-      throw new Error("Failed to create product through both Supabase API and direct SQL");
     } catch (error: any) {
       console.error("Error in createProduct:", error.message || error);
       throw error;
