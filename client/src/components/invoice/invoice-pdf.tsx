@@ -113,8 +113,8 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
           style={{ width: "100%" }}
         >
           <InvoiceTemplateRenderer 
-            templateId={invoice.company.templateId || "standard"}
-            colorTheme={invoice.company.colorTheme || "blue"}
+            templateId={(invoice.company && invoice.company.templateId) ? invoice.company.templateId : "standard"}
+            colorTheme={(invoice.company && invoice.company.colorTheme) ? invoice.company.colorTheme : "blue"}
             invoice={invoice.invoice}
             items={invoice.items}
             company={invoice.company}
