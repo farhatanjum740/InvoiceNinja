@@ -306,6 +306,7 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         sgst: gstTotals.sgst,
         igst: gstTotals.igst,
         total,
+        totalAmount: total, // Add totalAmount for backend compatibility
         customerName: selectedCustomer?.name || "",
         templateId: selectedTemplate,
         colorTheme: selectedColor
@@ -314,6 +315,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
       company,
       customer: selectedCustomer,
     };
+    
+    // Log the data to help with debugging
+    console.log("Prepared invoice data:", completeInvoiceData);
     
     setPreviewInvoiceData(completeInvoiceData);
     onDataChange(completeInvoiceData);
@@ -355,7 +359,8 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         cgst: gstTotals.cgst !== null && gstTotals.cgst !== undefined ? gstTotals.cgst.toString() : '0.00',
         sgst: gstTotals.sgst !== null && gstTotals.sgst !== undefined ? gstTotals.sgst.toString() : '0.00', 
         igst: gstTotals.igst !== null && gstTotals.igst !== undefined ? gstTotals.igst.toString() : '0.00',
-        total: total.toString()
+        total: total.toString(),
+        totalAmount: total.toString() // Add this for backend compatibility
       },
       items: invoiceItems.map(item => ({
         ...item,
