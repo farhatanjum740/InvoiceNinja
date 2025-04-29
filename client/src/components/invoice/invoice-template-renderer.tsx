@@ -89,9 +89,9 @@ export function InvoiceTemplateRenderer({
             <div>
               <h3 className="text-gray-500 text-sm mb-2">BILL TO</h3>
               <p className="font-semibold">{customer.name}</p>
-              <p className="text-gray-700 text-sm mt-1">{customer.billingAddress}</p>
-              <p className="text-gray-700 text-sm">{customer.billingCity}, {customer.billingState}</p>
-              <p className="text-gray-700 text-sm">{customer.billingPincode}</p>
+              <p className="text-gray-700 text-sm mt-1">{customer.billingAddress || ''}</p>
+              <p className="text-gray-700 text-sm">{customer.billingCity || ''}{customer.billingState ? `, ${customer.billingState}` : ''}</p>
+              <p className="text-gray-700 text-sm">{customer.billingPincode || ''}</p>
               {customer.gstin && <p className="text-gray-700 text-sm mt-2">GSTIN: {customer.gstin}</p>}
             </div>
             
@@ -232,8 +232,12 @@ export function InvoiceTemplateRenderer({
             <div>
               <p className="text-sm text-gray-500 mb-1">BILL TO</p>
               <p className="font-medium">{customer.name}</p>
-              <p className="text-sm">{customer.billingAddress}</p>
-              <p className="text-sm">{customer.billingCity}, {customer.billingState} - {customer.billingPincode}</p>
+              <p className="text-sm">{customer.billingAddress || ''}</p>
+              <p className="text-sm">
+                {customer.billingCity || ''}
+                {customer.billingState ? `, ${customer.billingState}` : ''}
+                {customer.billingPincode ? ` - ${customer.billingPincode}` : ''}
+              </p>
               {customer.gstin && <p className="text-sm mt-1">GSTIN: {customer.gstin}</p>}
             </div>
             
@@ -281,7 +285,7 @@ export function InvoiceTemplateRenderer({
                   <tr key={index} className="border-b">
                     <td className="py-3">{item.description}</td>
                     <td className="py-3">{item.hsnCode || '-'}</td>
-                    <td className="py-3 text-right">{item.quantity}</td>
+                    <td className="py-3 text-right">{item.quantity || 0} {item.unit || 'Piece'}</td>
                     <td className="py-3 text-right">{typeof item.rate === 'number' ? 
                       formatCurrency(item.rate) : item.rate}</td>
                     <td className="py-3 text-right">{typeof item.amount === 'number' ? 
@@ -378,9 +382,12 @@ export function InvoiceTemplateRenderer({
             <div className="border p-4 rounded-md">
               <h3 className={cn("font-serif font-semibold mb-2", selectedColor.textColor)}>BILL TO</h3>
               <p className="font-medium">{customer.name}</p>
-              <p className="text-sm">{customer.billingAddress}</p>
-              <p className="text-sm">{customer.billingCity}, {customer.billingState}</p>
-              <p className="text-sm">{customer.billingPincode}</p>
+              <p className="text-sm">{customer.billingAddress || ''}</p>
+              <p className="text-sm">
+                {customer.billingCity || ''}
+                {customer.billingState ? `, ${customer.billingState}` : ''}
+              </p>
+              <p className="text-sm">{customer.billingPincode || ''}</p>
               {customer.gstin && <p className="text-sm mt-2">GSTIN: {customer.gstin}</p>}
             </div>
             
@@ -435,7 +442,7 @@ export function InvoiceTemplateRenderer({
                   <tr key={index} className={index % 2 === 0 ? "bg-gray-50" : ""}>
                     <td className="p-3 border-b">{item.description}</td>
                     <td className="p-3 border-b">{item.hsnCode || '-'}</td>
-                    <td className="p-3 border-b text-right">{item.quantity}</td>
+                    <td className="p-3 border-b text-right">{item.quantity || 0} {item.unit || 'Piece'}</td>
                     <td className="p-3 border-b text-right">{typeof item.rate === 'number' ? 
                       formatCurrency(item.rate) : item.rate}</td>
                     <td className="p-3 border-b text-right">{item.gstRate}%</td>

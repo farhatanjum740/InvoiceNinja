@@ -477,6 +477,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const invoiceWithItems = await storage.getInvoiceWithItems(invoiceId);
       
+      // Log the response for debugging
+      console.log("Invoice response data:", JSON.stringify({
+        invoice: {
+          ...invoiceWithItems.invoice,
+          // Don't log sensitive fields
+          password: undefined
+        },
+        itemsCount: invoiceWithItems.items.length,
+        sampleItem: invoiceWithItems.items[0] || null
+      }, null, 2));
+      
       return res.json(invoiceWithItems);
     } catch (error) {
       console.error("Error fetching invoice:", error);
