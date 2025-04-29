@@ -759,81 +759,88 @@ export class SupabaseStorage implements IStorage {
   
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
     try {
-      // Attempt to force refresh the schema cache before fetching invoices
+      // SKIP Supabase and ALWAYS use direct SQL to get the latest data
+      console.log("Using direct SQL to fetch invoices to ensure we see the latest data");
       try {
-        await refreshSupabaseSchemaCache();
-        await supabase.rpc('reload_schema_cache').catch(e => console.warn("RPC cache refresh failed:", e));
-      } catch (cacheError) {
-        console.warn("Schema cache refresh during getInvoicesByUserId failed:", cacheError);
-      }
-      
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('user_id', userId);
+        const pool = await this.getDirectDbConnection();
+        const result = await pool.query(`
+          SELECT * FROM invoices WHERE user_id = $1 ORDER BY id DESC
+        `, [userId]);
         
-      if (error) {
-        console.error("Supabase invoices fetch error:", error);
+        await pool.end();
         
-        // Try falling back to direct SQL query
-        console.log("Attempting direct SQL fallback for invoice list");
-        try {
-          const pool = await this.getDirectDbConnection();
-          const result = await pool.query(`
-            SELECT * FROM invoices WHERE user_id = $1
-          `, [userId]);
+        if (result.rows && result.rows.length > 0) {
+          console.log(`Found ${result.rows.length} invoices via direct SQL`);
           
-          await pool.end();
-          
-          if (result.rows && result.rows.length > 0) {
-            console.log(`Found ${result.rows.length} invoices via direct SQL`);
-            
-            return result.rows.map(i => ({
-              id: i.id,
-              userId: i.user_id,
-              customerId: i.customer_id,
-              invoiceNumber: i.invoice_number,
-              invoiceDate: i.invoice_date,
-              dueDate: i.due_date,
-              notes: i.notes || null,
-              status: i.status,
-              subtotal: i.subtotal,
-              cgst: i.cgst || '0.00',
-              sgst: i.sgst || '0.00',
-              igst: i.igst || '0.00',
-              total: i.total,
-              termsAndConditions: i.terms_and_conditions || null,
-              templateId: i.template_id || 'standard',
-              colorTheme: i.color_theme || 'blue'
-            }));
-          } else {
-            return [];
-          }
-        } catch (sqlError) {
-          console.error("Direct SQL fallback also failed:", sqlError);
+          return result.rows.map(i => ({
+            id: i.id,
+            userId: i.user_id,
+            customerId: i.customer_id,
+            invoiceNumber: i.invoice_number,
+            invoiceDate: i.invoice_date,
+            dueDate: i.due_date,
+            notes: i.notes || null,
+            status: i.status,
+            subtotal: i.subtotal,
+            cgst: i.cgst || '0.00',
+            sgst: i.sgst || '0.00',
+            igst: i.igst || '0.00',
+            total: i.total,
+            termsAndConditions: i.terms_and_conditions || null,
+            templateId: i.template_id || 'standard',
+            colorTheme: i.color_theme || 'blue'
+          }));
+        } else {
           return [];
         }
+      } catch (sqlError) {
+        console.error("Direct SQL query failed:", sqlError);
+        
+        // Only now try Supabase as a fallback
+        console.log("Falling back to Supabase for invoice list");
+        
+        // Attempt to force refresh the schema cache before fetching invoices
+        try {
+          await refreshSupabaseSchemaCache();
+          try {
+            await supabase.rpc('reload_schema_cache');
+          } catch (e) {
+            console.warn("RPC cache refresh failed:", e);
+          }
+        } catch (cacheError) {
+          console.warn("Schema cache refresh during getInvoicesByUserId failed:", cacheError);
+        }
+        
+        const { data, error } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('user_id', userId);
+          
+        if (error) {
+          console.error("Supabase invoices fetch error:", error);
+          return [];
+        }
+        
+        // Transform Supabase snake_case to camelCase
+        return data.map(i => ({
+          id: i.id,
+          userId: i.user_id,
+          customerId: i.customer_id,
+          invoiceNumber: i.invoice_number,
+          invoiceDate: i.invoice_date,
+          dueDate: i.due_date,
+          notes: i.notes || null,
+          status: i.status,
+          subtotal: i.subtotal,
+          cgst: i.cgst || '0.00',
+          sgst: i.sgst || '0.00',
+          igst: i.igst || '0.00',
+          total: i.total,
+          termsAndConditions: i.terms_and_conditions || null,
+          templateId: i.template_id || 'standard',
+          colorTheme: i.color_theme || 'blue'
+        }));
       }
-      
-      // Transform Supabase snake_case to camelCase
-      return data.map(i => ({
-        id: i.id,
-        userId: i.user_id,
-        customerId: i.customer_id,
-        invoiceNumber: i.invoice_number,
-        invoiceDate: i.invoice_date,
-        dueDate: i.due_date,
-        notes: i.notes || null,
-        status: i.status,
-        subtotal: i.subtotal,
-        cgst: i.cgst || '0.00',
-        sgst: i.sgst || '0.00',
-        igst: i.igst || '0.00',
-        total: i.total,
-        termsAndConditions: i.terms_and_conditions || null,
-        templateId: i.template_id || 'standard',
-        colorTheme: i.color_theme || 'blue'
-      }));
     } catch (error) {
       console.error("Error fetching invoices:", error);
       return [];
@@ -842,6 +849,45 @@ export class SupabaseStorage implements IStorage {
   
   async getInvoice(id: number): Promise<Invoice | undefined> {
     try {
+      // ALWAYS use direct SQL first to ensure we get the latest data
+      console.log(`Using direct SQL to fetch invoice with ID ${id}`);
+      try {
+        const pool = await this.getDirectDbConnection();
+        const result = await pool.query(`
+          SELECT * FROM invoices WHERE id = $1
+        `, [id]);
+        
+        await pool.end();
+        
+        if (result.rows && result.rows.length > 0) {
+          console.log(`Found invoice ${id} via direct SQL`);
+          const data = result.rows[0];
+          
+          return {
+            id: data.id,
+            userId: data.user_id,
+            customerId: data.customer_id,
+            invoiceNumber: data.invoice_number,
+            invoiceDate: data.invoice_date,
+            dueDate: data.due_date,
+            notes: data.notes || null,
+            status: data.status,
+            subtotal: data.subtotal,
+            cgst: data.cgst || '0.00',
+            sgst: data.sgst || '0.00',
+            igst: data.igst || '0.00',
+            total: data.total,
+            termsAndConditions: data.terms_and_conditions || null,
+            templateId: data.template_id || 'standard',
+            colorTheme: data.color_theme || 'blue'
+          };
+        }
+      } catch (sqlError) {
+        console.error("Direct SQL query failed:", sqlError);
+      }
+      
+      // Fall back to Supabase if direct SQL fails
+      console.log("Falling back to Supabase for invoice details");
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
@@ -917,68 +963,141 @@ export class SupabaseStorage implements IStorage {
   
   async getInvoiceWithItems(id: number): Promise<{ invoice: Invoice; items: InvoiceItem[] }> {
     try {
-      // Get the invoice
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('id', id)
-        .single();
+      // Use direct SQL to ensure we get the latest data
+      console.log(`Using direct SQL to fetch invoice ${id} with items`);
+      let invoice: Invoice | undefined = undefined;
+      let items: InvoiceItem[] = [];
+      
+      try {
+        // First get the invoice data
+        const pool = await this.getDirectDbConnection();
         
-      if (invoiceError) {
-        console.error("Supabase invoice fetch error:", invoiceError);
-        throw new Error('Invoice not found');
-      }
-      
-      if (!invoiceData) {
-        throw new Error('Invoice not found');
-      }
-      
-      // Get the invoice items
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('invoice_items')
-        .select('*')
-        .eq('invoice_id', id);
+        // Get invoice
+        const invoiceResult = await pool.query(`
+          SELECT * FROM invoices WHERE id = $1
+        `, [id]);
         
-      if (itemsError) {
-        console.error("Supabase invoice items fetch error:", itemsError);
-        throw new Error('Error fetching invoice items');
+        if (!invoiceResult.rows || invoiceResult.rows.length === 0) {
+          await pool.end();
+          throw new Error('Invoice not found');
+        }
+        
+        const invoiceData = invoiceResult.rows[0];
+        
+        // Transform SQL data to camelCase for invoice
+        invoice = {
+          id: invoiceData.id,
+          userId: invoiceData.user_id,
+          customerId: invoiceData.customer_id,
+          invoiceNumber: invoiceData.invoice_number,
+          invoiceDate: invoiceData.invoice_date,
+          dueDate: invoiceData.due_date,
+          notes: invoiceData.notes || null,
+          status: invoiceData.status,
+          subtotal: invoiceData.subtotal,
+          cgst: invoiceData.cgst || '0.00',
+          sgst: invoiceData.sgst || '0.00',
+          igst: invoiceData.igst || '0.00',
+          total: invoiceData.total,
+          termsAndConditions: invoiceData.terms_and_conditions || null,
+          templateId: invoiceData.template_id || 'standard',
+          colorTheme: invoiceData.color_theme || 'blue'
+        };
+        
+        // Now get the invoice items
+        const itemsResult = await pool.query(`
+          SELECT * FROM invoice_items WHERE invoice_id = $1
+        `, [id]);
+        
+        await pool.end();
+        
+        if (itemsResult.rows && itemsResult.rows.length > 0) {
+          // Transform SQL data to camelCase for items
+          items = itemsResult.rows.map((item: any) => ({
+            id: item.id,
+            invoiceId: item.invoice_id,
+            productId: item.product_id,
+            description: item.description,
+            unit: item.unit || 'Piece', // Adding unit field with default value
+            quantity: item.quantity,
+            rate: item.rate,
+            amount: item.amount,
+            gstRate: item.gst_rate,
+            hsnCode: item.hsn_code || null
+          }));
+        }
+        
+        console.log(`Successfully fetched invoice ${id} with ${items.length} items via direct SQL`);
+        return { invoice, items };
+      } catch (sqlError) {
+        console.error("Direct SQL query failed:", sqlError);
+        
+        // Fall back to Supabase if direct SQL fails
+        console.log("Falling back to Supabase for invoice with items");
+        
+        // Get the invoice
+        const { data: invoiceData, error: invoiceError } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (invoiceError) {
+          console.error("Supabase invoice fetch error:", invoiceError);
+          throw new Error('Invoice not found');
+        }
+        
+        if (!invoiceData) {
+          throw new Error('Invoice not found');
+        }
+        
+        // Get the invoice items
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('invoice_items')
+          .select('*')
+          .eq('invoice_id', id);
+          
+        if (itemsError) {
+          console.error("Supabase invoice items fetch error:", itemsError);
+          throw new Error('Error fetching invoice items');
+        }
+        
+        // Transform Supabase snake_case to camelCase for invoice
+        invoice = {
+          id: invoiceData.id,
+          userId: invoiceData.user_id,
+          customerId: invoiceData.customer_id,
+          invoiceNumber: invoiceData.invoice_number,
+          invoiceDate: invoiceData.invoice_date,
+          dueDate: invoiceData.due_date,
+          notes: invoiceData.notes || null,
+          status: invoiceData.status,
+          subtotal: invoiceData.subtotal,
+          cgst: invoiceData.cgst || '0.00',
+          sgst: invoiceData.sgst || '0.00',
+          igst: invoiceData.igst || '0.00',
+          total: invoiceData.total,
+          termsAndConditions: invoiceData.terms_and_conditions || null,
+          templateId: invoiceData.template_id || 'standard',
+          colorTheme: invoiceData.color_theme || 'blue'
+        };
+        
+        // Transform Supabase snake_case to camelCase for items
+        items = itemsData.map((item: any) => ({
+          id: item.id,
+          invoiceId: item.invoice_id,
+          productId: item.product_id,
+          description: item.description,
+          unit: item.unit || 'Piece', // Adding unit field with default value
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount,
+          gstRate: item.gst_rate,
+          hsnCode: item.hsn_code || null
+        }));
+        
+        return { invoice, items };
       }
-      
-      // Transform Supabase snake_case to camelCase for invoice
-      const invoice = {
-        id: invoiceData.id,
-        userId: invoiceData.user_id,
-        customerId: invoiceData.customer_id,
-        invoiceNumber: invoiceData.invoice_number,
-        invoiceDate: invoiceData.invoice_date,
-        dueDate: invoiceData.due_date,
-        notes: invoiceData.notes || null,
-        status: invoiceData.status,
-        subtotal: invoiceData.subtotal,
-        cgst: invoiceData.cgst || '0.00',
-        sgst: invoiceData.sgst || '0.00',
-        igst: invoiceData.igst || '0.00',
-        total: invoiceData.total,
-        termsAndConditions: invoiceData.terms_and_conditions || null,
-        templateId: invoiceData.template_id || 'standard',
-        colorTheme: invoiceData.color_theme || 'blue'
-      };
-      
-      // Transform Supabase snake_case to camelCase for items
-      const items = itemsData.map((item: any) => ({
-        id: item.id,
-        invoiceId: item.invoice_id,
-        productId: item.product_id,
-        description: item.description,
-        unit: item.unit || 'Piece', // Adding unit field with default value
-        quantity: item.quantity,
-        rate: item.rate,
-        amount: item.amount,
-        gstRate: item.gst_rate,
-        hsnCode: item.hsn_code || null
-      }));
-      
-      return { invoice, items };
     } catch (error) {
       console.error("Error fetching invoice with items:", error);
       throw error;
