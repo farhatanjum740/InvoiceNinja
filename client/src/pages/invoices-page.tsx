@@ -38,11 +38,24 @@ export default function InvoicesPage() {
     }).format(date);
   };
 
-  const formatAmount = (amount: number) => {
+  const formatAmount = (amount: any) => {
+    // Handle cases where amount is undefined, null, NaN, or a string
+    if (amount === undefined || amount === null) {
+      return "₹0.00";
+    }
+    
+    // Convert to number if it's a string
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    
+    // Check if it's a valid number
+    if (isNaN(numAmount)) {
+      return "₹0.00";
+    }
+    
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
-    }).format(amount);
+    }).format(numAmount);
   };
 
   const getStatusBadge = (status: string) => {
