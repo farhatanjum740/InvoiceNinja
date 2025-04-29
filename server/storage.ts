@@ -421,6 +421,25 @@ export class SupabaseStorage implements IStorage {
   
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
     try {
+      console.log("Creating customer with data:", { 
+        ...customer, 
+        userId: customer.userId 
+      });
+      
+      // First try to get the maximum ID from the customers table to ensure we don't have conflicts
+      const { data: maxIdData, error: maxIdError } = await supabase
+        .from('customers')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1);
+        
+      if (maxIdError) {
+        console.warn("Could not get max customer ID:", maxIdError);
+      } else {
+        console.log("Current max customer ID:", maxIdData && maxIdData.length > 0 ? maxIdData[0].id : "No customers yet");
+      }
+      
+      // Insert the customer data without specifying an ID
       const { data, error } = await supabase
         .from('customers')
         .insert({
@@ -602,6 +621,25 @@ export class SupabaseStorage implements IStorage {
   
   async createProduct(product: InsertProduct): Promise<Product> {
     try {
+      console.log("Creating product with data:", { 
+        ...product, 
+        userId: product.userId 
+      });
+      
+      // First try to get the maximum ID from the products table to ensure we don't have conflicts
+      const { data: maxIdData, error: maxIdError } = await supabase
+        .from('products')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1);
+        
+      if (maxIdError) {
+        console.warn("Could not get max product ID:", maxIdError);
+      } else {
+        console.log("Current max product ID:", maxIdData && maxIdData.length > 0 ? maxIdData[0].id : "No products yet");
+      }
+      
+      // Insert the product data without specifying an ID
       const { data, error } = await supabase
         .from('products')
         .insert({
