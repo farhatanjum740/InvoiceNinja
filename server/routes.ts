@@ -54,7 +54,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             logo: "",
             bankName: "",
             accountNumber: "",
-            ifscCode: ""
+            ifscCode: "",
+            templateId: "standard",
+            colorTheme: "blue"
           });
           
           return res.json(newCompany);
@@ -105,6 +107,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.patch("/api/company/:id", handleCompanyUpdate);
   app.put("/api/company/:id", handleCompanyUpdate);
+  
+  // Update company without ID parameter (uses the user's company)
+  app.patch("/api/company", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      // Get the user's company
+      const company = await storage.getCompanyByUserId(req.user.id);
+      
+      if (!company) {
+        return res.status(404).json({ error: "Company not found" });
+      }
+      
+      // Update the company with the request body
+      const updatedCompany = await storage.updateCompany(company.id, req.body);
+      
+      return res.json(updatedCompany);
+    } catch (error) {
+      console.error("Error updating company:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
 
   // Customer endpoints
   app.get("/api/customers", async (req: Request, res: Response) => {

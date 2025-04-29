@@ -270,7 +270,9 @@ export class SupabaseStorage implements IStorage {
           bank_name: company.bankName || null,
           account_number: company.accountNumber || null,
           ifsc_code: company.ifscCode || null,
-          logo: company.logo || null
+          logo: company.logo || null,
+          template_id: company.templateId || "standard",
+          color_theme: company.colorTheme || "blue"
         })
         .select()
         .single();
@@ -319,6 +321,8 @@ export class SupabaseStorage implements IStorage {
       if (company.accountNumber !== undefined) updateData.account_number = company.accountNumber;
       if (company.ifscCode !== undefined) updateData.ifsc_code = company.ifscCode;
       if (company.logo !== undefined) updateData.logo = company.logo;
+      if (company.templateId !== undefined) updateData.template_id = company.templateId;
+      if (company.colorTheme !== undefined) updateData.color_theme = company.colorTheme;
       
       const { data, error } = await supabase
         .from('companies')
