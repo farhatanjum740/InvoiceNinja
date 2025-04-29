@@ -96,40 +96,6 @@ export class SupabaseStorage implements IStorage {
     });
     
     console.log('Using PostgreSQL session store');
-    
-    // Attempt to reset sequences on startup to avoid ID conflicts
-    this.resetAllSequences().catch(err => {
-      console.warn('Failed to reset sequences on startup:', err.message || err);
-    });
-  }
-  
-  // Reset all table sequences to avoid ID conflicts between Neon and Supabase
-  private async resetAllSequences() {
-    try {
-      console.log('Resetting all table sequences to prevent ID conflicts...');
-      
-      // List of tables with ID sequences
-      const tables = ['users', 'companies', 'customers', 'products', 'invoices', 'invoice_items'];
-      
-      for (const table of tables) {
-        try {
-          // Find the max ID and add a safe buffer
-          const result = await pool.query(`SELECT COALESCE(MAX(id), 0) + 10 as max_id FROM ${table}`);
-          const maxId = result.rows[0].max_id;
-          
-          // Reset the sequence
-          await pool.query(`SELECT setval('${table}_id_seq', ${maxId}, true)`);
-          console.log(`Reset sequence for ${table} to ${maxId}`);
-        } catch (err) {
-          console.warn(`Failed to reset sequence for ${table}:`, err.message || err);
-        }
-      }
-      
-      console.log('All sequences have been reset successfully');
-    } catch (error) {
-      console.error('Error resetting sequences:', error);
-      throw error;
-    }
   }
   
   // User Management
@@ -283,68 +249,9 @@ export class SupabaseStorage implements IStorage {
     try {
       console.log("Creating company with data:", company);
       
-      // First try direct SQL for more reliability
-      try {
-        // Generate a safe ID by adding a buffer to the current max ID
-        const maxIdResult = await pool.query('SELECT COALESCE(MAX(id), 0) + 5 as next_id FROM companies');
-        const nextId = maxIdResult.rows[0].next_id;
-        console.log("Using generated ID for company insert:", nextId);
-        
-        const result = await pool.query(
-          `INSERT INTO companies (
-            id, name, user_id, email, gstin, address, city, state, pincode, phone, bank_name, account_number, ifsc_code, logo
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-          ) RETURNING *`,
-          [
-            nextId,
-            company.name,
-            company.userId,
-            company.email || null,
-            company.gstin || null,
-            company.address,
-            company.city,
-            company.state,
-            company.pincode,
-            company.phone || null,
-            company.bankName || null,
-            company.accountNumber || null,
-            company.ifscCode || null,
-            company.logo || null
-          ]
-        );
-        
-        if (result.rows.length > 0) {
-          const newCompany = result.rows[0];
-          console.log("Successfully created company with direct SQL using ID:", nextId);
-          
-          // Sync the direct database change with Supabase
-          await syncDirectDatabaseChange('companies');
-          
-          return {
-            id: newCompany.id,
-            name: newCompany.name,
-            userId: newCompany.user_id,
-            email: newCompany.email,
-            gstin: newCompany.gstin,
-            address: newCompany.address,
-            city: newCompany.city,
-            state: newCompany.state,
-            pincode: newCompany.pincode,
-            phone: newCompany.phone,
-            bankName: newCompany.bank_name,
-            accountNumber: newCompany.account_number,
-            ifscCode: newCompany.ifsc_code,
-            logo: newCompany.logo
-          };
-        }
-      } catch (directSqlError: any) {
-        console.warn("Direct SQL insert failed, attempting Supabase Data API:", directSqlError.message || directSqlError);
-      }
-      
-      // Fallback to Supabase API if direct SQL fails
-      console.log("Attempting insert with Supabase Data API");
-      const { data, error } = await supabase
+      // Insert the company using Supabase only
+      console.log("Creating company using Supabase API");
+      const { data: createdCompany, error } = await supabase
         .from('companies')
         .insert({
           name: company.name,
@@ -369,21 +276,22 @@ export class SupabaseStorage implements IStorage {
         throw new Error(`Failed to create company: ${error.message}`);
       }
       
+      console.log("Successfully created company:", createdCompany);
       return {
-        id: data.id,
-        name: data.name,
-        userId: data.user_id,
-        email: data.email,
-        gstin: data.gstin,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
-        phone: data.phone,
-        bankName: data.bank_name,
-        accountNumber: data.account_number,
-        ifscCode: data.ifsc_code,
-        logo: data.logo
+        id: createdCompany.id,
+        name: createdCompany.name,
+        userId: createdCompany.user_id,
+        email: createdCompany.email,
+        gstin: createdCompany.gstin,
+        address: createdCompany.address,
+        city: createdCompany.city,
+        state: createdCompany.state,
+        pincode: createdCompany.pincode,
+        phone: createdCompany.phone,
+        bankName: createdCompany.bank_name,
+        accountNumber: createdCompany.account_number,
+        ifscCode: createdCompany.ifsc_code,
+        logo: createdCompany.logo
       };
     } catch (error) {
       console.error("Error in createCompany:", error);
@@ -514,64 +422,26 @@ export class SupabaseStorage implements IStorage {
     }
   }
   
-  // Helper function to forcefully create a record in Supabase and directly in the DB
-  private async forceCreateInBothDatabases<T>(
-    tableName: string,
-    data: Record<string, any>,
-    mapResultToType: (row: any) => T
-  ): Promise<T> {
-    console.log(`Force creating record in ${tableName} with synchronized ID`);
-    
-    // 1. First get the max ID from the database and add a buffer
-    const maxIdResult = await pool.query(`SELECT COALESCE(MAX(id), 0) + 10 as next_id FROM ${tableName}`);
-    const nextId = maxIdResult.rows[0].next_id;
-    console.log(`Using ID ${nextId} for new ${tableName} record`);
-    
-    // 2. Try to delete any record with this ID from both databases (cleanup)
+  // Helper function to get the next ID in sequence for a table
+  private async getNextId(tableName: string): Promise<number> {
     try {
-      await pool.query(`DELETE FROM ${tableName} WHERE id = $1`, [nextId]);
-      await supabase.from(tableName).delete().eq('id', nextId);
-    } catch (cleanupError) {
-      console.warn(`Cleanup error (ignorable): ${cleanupError}`);
-    }
-    
-    // 3. Insert directly into the database with explicit ID
-    const columnNames = Object.keys(data).join(', ');
-    const placeholders = Object.keys(data).map((_, i) => `$${i + 2}`).join(', ');
-    
-    const insertSQL = `
-      INSERT INTO ${tableName} (id, ${columnNames}) 
-      VALUES ($1, ${placeholders}) 
-      RETURNING *
-    `;
-    
-    const params = [nextId, ...Object.values(data)];
-    
-    try {
-      const result = await pool.query(insertSQL, params);
-      
-      if (result.rows.length === 0) {
-        throw new Error(`Failed to insert record into ${tableName}`);
-      }
-      
-      // 4. Now insert the same data with the same ID into Supabase
-      const { error } = await supabase
+      // Use Supabase's Data API to find the max ID
+      const { data, error } = await supabase
         .from(tableName)
-        .insert({ id: nextId, ...data });
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1);
       
       if (error) {
-        console.warn(`Supabase insert error: ${error.message}. Will try to force refresh cache.`);
-        // Try to force Supabase to see the new record
-        await syncDirectDatabaseChange(tableName);
-      } else {
-        console.log(`Successfully inserted record into both databases with ID: ${nextId}`);
+        console.error(`Error getting max ID for ${tableName}:`, error);
+        return 1; // Start with 1 if we can't determine
       }
       
-      // 5. Return the mapped result
-      return mapResultToType(result.rows[0]);
+      const maxId = data?.length > 0 ? data[0].id : 0;
+      return maxId + 1;
     } catch (error) {
-      console.error(`Error in forceCreateInBothDatabases for ${tableName}:`, error);
-      throw error;
+      console.error(`Error in getNextId for ${tableName}:`, error);
+      return 1; // Default to 1 if there's an error
     }
   }
 
@@ -600,28 +470,37 @@ export class SupabaseStorage implements IStorage {
         same_as_shipping: customer.sameAsShipping || false
       };
       
-      // Use the force create function to ensure consistency between Neon and Supabase
-      return this.forceCreateInBothDatabases<Customer>(
-        'customers',
-        customerData,
-        (row) => ({
-          id: row.id,
-          name: row.name,
-          userId: row.user_id,
-          email: row.email,
-          gstin: row.gstin,
-          phone: row.phone,
-          billingAddress: row.billing_address,
-          billingCity: row.billing_city,
-          billingState: row.billing_state,
-          billingPincode: row.billing_pincode,
-          shippingAddress: row.shipping_address,
-          shippingCity: row.shipping_city,
-          shippingState: row.shipping_state,
-          shippingPincode: row.shipping_pincode,
-          sameAsShipping: row.same_as_shipping
-        })
-      );
+      // Insert the customer using Supabase only
+      console.log("Creating customer using Supabase API");
+      const { data: createdCustomer, error } = await supabase
+        .from('customers')
+        .insert(customerData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error creating customer:", error);
+        throw new Error(`Failed to create customer: ${error.message}`);
+      }
+      
+      console.log("Successfully created customer:", createdCustomer);
+      return {
+        id: createdCustomer.id,
+        name: createdCustomer.name,
+        userId: createdCustomer.user_id,
+        email: createdCustomer.email,
+        gstin: createdCustomer.gstin,
+        phone: createdCustomer.phone,
+        billingAddress: createdCustomer.billing_address,
+        billingCity: createdCustomer.billing_city,
+        billingState: createdCustomer.billing_state,
+        billingPincode: createdCustomer.billing_pincode,
+        shippingAddress: createdCustomer.shipping_address,
+        shippingCity: createdCustomer.shipping_city,
+        shippingState: createdCustomer.shipping_state,
+        shippingPincode: createdCustomer.shipping_pincode,
+        sameAsShipping: createdCustomer.same_as_shipping
+      };
     } catch (error: any) {
       console.error("Error in createCustomer:", error.message || error);
       throw error;
@@ -776,21 +655,30 @@ export class SupabaseStorage implements IStorage {
         gst_rate: product.gstRate || 0
       };
       
-      // Use the force create function to ensure consistency between Neon and Supabase
-      return this.forceCreateInBothDatabases<Product>(
-        'products',
-        productData,
-        (row) => ({
-          id: row.id,
-          name: row.name,
-          userId: row.user_id,
-          description: row.description,
-          hsnCode: row.hsn_code,
-          unit: row.unit,
-          rate: row.rate,
-          gstRate: row.gst_rate
-        })
-      );
+      // Insert the product using Supabase only
+      console.log("Creating product using Supabase API");
+      const { data: createdProduct, error } = await supabase
+        .from('products')
+        .insert(productData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error creating product:", error);
+        throw new Error(`Failed to create product: ${error.message}`);
+      }
+      
+      console.log("Successfully created product:", createdProduct);
+      return {
+        id: createdProduct.id,
+        name: createdProduct.name,
+        userId: createdProduct.user_id,
+        description: createdProduct.description,
+        hsnCode: createdProduct.hsn_code,
+        unit: createdProduct.unit,
+        rate: createdProduct.rate,
+        gstRate: createdProduct.gst_rate
+      };
     } catch (error: any) {
       console.error("Error in createProduct:", error.message || error);
       throw error;
