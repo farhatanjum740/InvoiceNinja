@@ -528,23 +528,204 @@ export class SupabaseStorage implements IStorage {
   // Stub implementations for the rest of the methods
   
   async getProductsByUserId(userId: number): Promise<Product[]> {
-    return [];
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', userId);
+      
+      if (error) {
+        console.error("Error fetching products:", error);
+        return [];
+      }
+      
+      return data.map(p => ({
+        id: p.id,
+        name: p.name,
+        userId: p.user_id,
+        description: p.description,
+        hsnCode: p.hsn_code,
+        unit: p.unit,
+        rate: p.rate,
+        gstRate: p.gst_rate
+      }));
+    } catch (error) {
+      console.error("Error in getProductsByUserId:", error);
+      return [];
+    }
   }
   
   async getProduct(id: number): Promise<Product | undefined> {
-    return undefined;
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error || !data) {
+        return undefined;
+      }
+      
+      return {
+        id: data.id,
+        name: data.name,
+        userId: data.user_id,
+        description: data.description,
+        hsnCode: data.hsn_code,
+        unit: data.unit,
+        rate: data.rate,
+        gstRate: data.gst_rate
+      };
+    } catch (error) {
+      console.error("Error in getProduct:", error);
+      return undefined;
+    }
   }
   
   async createProduct(product: InsertProduct): Promise<Product> {
-    throw new Error("Method not implemented.");
+    try {
+      // Check if a product with the same name already exists for this user
+      const { data: existingProducts, error: checkError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('user_id', product.userId)
+        .eq('name', product.name);
+      
+      if (checkError) {
+        console.error("Error checking for existing products:", checkError);
+      } else if (existingProducts && existingProducts.length > 0) {
+        throw { 
+          code: 'DUPLICATE_NAME',
+          message: `A product with the name "${product.name}" already exists in your catalog.`
+        };
+      }
+      
+      const { data, error } = await supabase
+        .from('products')
+        .insert({
+          name: product.name,
+          user_id: product.userId,
+          description: product.description || null,
+          hsn_code: product.hsnCode || null,
+          unit: product.unit || 'Piece',
+          rate: product.rate || 0,
+          gst_rate: product.gstRate || 0
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error creating product:", error);
+        throw error;
+      }
+      
+      return {
+        id: data.id,
+        name: data.name,
+        userId: data.user_id,
+        description: data.description,
+        hsnCode: data.hsn_code,
+        unit: data.unit,
+        rate: data.rate,
+        gstRate: data.gst_rate
+      };
+    } catch (error) {
+      console.error("Error in createProduct:", error);
+      throw error;
+    }
   }
   
   async updateProduct(id: number, product: Partial<InsertProduct>): Promise<Product | undefined> {
-    return undefined;
+    try {
+      // If trying to change the name, check for duplicates first
+      if (product.name && product.userId) {
+        const { data: existingProducts, error: checkError } = await supabase
+          .from('products')
+          .select('id')
+          .eq('user_id', product.userId)
+          .eq('name', product.name)
+          .neq('id', id);
+        
+        if (checkError) {
+          console.error("Error checking for existing products:", checkError);
+        } else if (existingProducts && existingProducts.length > 0) {
+          throw { 
+            code: 'DUPLICATE_NAME',
+            message: `A product with the name "${product.name}" already exists in your catalog.`
+          };
+        }
+      }
+      
+      const updateData: any = {};
+      if (product.name) updateData.name = product.name;
+      if (product.description !== undefined) updateData.description = product.description;
+      if (product.hsnCode !== undefined) updateData.hsn_code = product.hsnCode;
+      if (product.unit !== undefined) updateData.unit = product.unit;
+      if (product.rate !== undefined) updateData.rate = product.rate;
+      if (product.gstRate !== undefined) updateData.gst_rate = product.gstRate;
+      
+      const { data, error } = await supabase
+        .from('products')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error || !data) {
+        console.error("Error updating product:", error);
+        return undefined;
+      }
+      
+      return {
+        id: data.id,
+        name: data.name,
+        userId: data.user_id,
+        description: data.description,
+        hsnCode: data.hsn_code,
+        unit: data.unit,
+        rate: data.rate,
+        gstRate: data.gst_rate
+      };
+    } catch (error) {
+      console.error("Error in updateProduct:", error);
+      throw error;
+    }
   }
   
   async deleteProduct(id: number): Promise<boolean> {
-    return false;
+    try {
+      // Check if the product is used in any invoice items
+      const { data: usedInInvoices, error: checkError } = await supabase
+        .from('invoice_items')
+        .select('id')
+        .eq('product_id', id)
+        .limit(1);
+      
+      if (checkError) {
+        console.error("Error checking if product is used in invoices:", checkError);
+      } else if (usedInInvoices && usedInInvoices.length > 0) {
+        throw {
+          code: 'PRODUCT_IN_USE',
+          message: 'This product cannot be deleted because it is used in one or more invoices.'
+        };
+      }
+      
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Error deleting product:", error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error in deleteProduct:", error);
+      throw error;
+    }
   }
   
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
