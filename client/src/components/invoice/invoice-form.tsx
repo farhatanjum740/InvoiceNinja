@@ -234,6 +234,14 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     // Always update the invoice data for preview regardless of item count
     updateInvoiceData();
   }, [invoiceItems, selectedCustomer, company]);
+  
+  // Use company template settings instead of per-invoice settings
+  useEffect(() => {
+    if (company) {
+      setSelectedTemplate(company.templateId || "standard");
+      setSelectedColor(company.colorTheme || "blue");
+    }
+  }, [company]);
 
   // Save form state to localStorage
   const saveFormState = () => {
@@ -845,12 +853,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
             <CardContent className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-medium text-gray-700">Invoice Preview</h3>
-                <InvoiceTemplateSelector 
-                  selectedTemplate={selectedTemplate}
-                  selectedColor={selectedColor}
-                  onTemplateSelect={handleTemplateSelect}
-                  onColorSelect={handleColorSelect}
-                />
+                <div className="text-sm text-muted-foreground">
+                  Using company template: {selectedTemplate.charAt(0).toUpperCase() + selectedTemplate.slice(1)} ({selectedColor.charAt(0).toUpperCase() + selectedColor.slice(1)})
+                </div>
               </div>
               
               <div className="mt-6 border rounded-lg overflow-hidden">
