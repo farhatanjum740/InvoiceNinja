@@ -171,24 +171,59 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     // to show an empty invoice in the preview
 
     if (invoiceItems.length) {
-      // Calculate subtotal correctly from all items
-      const calculatedSubtotal = invoiceItems.reduce(
-        (sum, item) => sum + parseFloat(typeof item.amount === 'string' ? item.amount : item.amount.toString()),
-        0
-      );
-      
-      // Ensure subtotal is properly rounded for display
-      const roundedSubtotal = parseFloat(calculatedSubtotal.toFixed(2));
-      setSubtotal(roundedSubtotal);
+      try {
+        // Calculate subtotal correctly from all items
+        const calculatedSubtotal = invoiceItems.reduce(
+          (sum, item) => {
+            // Make sure we have a numeric amount value
+            const itemAmount = typeof item.amount === 'number' 
+              ? item.amount 
+              : parseFloat(String(item.amount || 0));
+            
+            // Check for valid number
+            if (isNaN(itemAmount)) {
+              console.warn("Found NaN item amount:", item);
+              return sum; // Skip this item if amount is NaN
+            }
+            
+            return sum + itemAmount;
+          },
+          0
+        );
+        
+        // Ensure subtotal is properly rounded for display
+        const roundedSubtotal = parseFloat(calculatedSubtotal.toFixed(2)) || 0;
+        setSubtotal(roundedSubtotal);
 
-      // Calculate GST based on each item's specific GST rate and customer shipping state
-      const gst = calculateGST(invoiceItems, selectedCustomer, company);
-      setGstTotals(gst);
+        // Calculate GST based on each item's specific GST rate and customer shipping state
+        const gst = calculateGST(invoiceItems, selectedCustomer, company);
+        
+        // Make sure GST values are valid numbers
+        const validatedGst = {
+          cgst: isNaN(gst.cgst) ? 0 : gst.cgst,
+          sgst: isNaN(gst.sgst) ? 0 : gst.sgst,
+          igst: isNaN(gst.igst) ? 0 : gst.igst
+        };
+        
+        setGstTotals(validatedGst);
 
-      // Calculate total (subtotal + all taxes)
-      const calculatedTotal = roundedSubtotal + gst.cgst + gst.sgst + gst.igst;
-      const roundedTotal = parseFloat(calculatedTotal.toFixed(2));
-      setTotal(roundedTotal);
+        // Calculate total (subtotal + all taxes)
+        const calculatedTotal = roundedSubtotal + validatedGst.cgst + validatedGst.sgst + validatedGst.igst;
+        const roundedTotal = parseFloat(calculatedTotal.toFixed(2)) || 0;
+        setTotal(roundedTotal);
+        
+        console.log("Calculated values:", {
+          subtotal: roundedSubtotal,
+          gst: validatedGst,
+          total: roundedTotal
+        });
+      } catch (error) {
+        console.error("Error calculating invoice totals:", error);
+        // Set fallback values
+        setSubtotal(0);
+        setGstTotals({ cgst: 0, sgst: 0, igst: 0 });
+        setTotal(0);
+      }
     } else {
       // Set default values for an empty invoice
       setSubtotal(0);

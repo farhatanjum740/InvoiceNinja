@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { formatCurrency, formatDate as formatDateUtil, formatInvoiceTotal } from "@/lib/utils/formatting";
 
 export default function InvoicesPage() {
   const [location, setLocation] = useLocation();
@@ -52,9 +53,12 @@ export default function InvoicesPage() {
       return "₹0.00";
     }
     
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
+    // Use the correct currency format for Indian Rupees
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(numAmount);
   };
 
