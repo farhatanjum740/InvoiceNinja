@@ -55,19 +55,18 @@ export function getInvoiceTotal(invoice: any): number {
   // Check all possible properties that might contain the total
   let total;
   
-  // Check for totalAmount first (backend format)
-  if (invoice.totalAmount !== undefined && invoice.totalAmount !== null) {
-    total = invoice.totalAmount;
-  }
-  // Then check for total (frontend format)
-  else if (invoice.total !== undefined && invoice.total !== null) {
+  // First try directly accessing total or totalAmount
+  if (invoice.total !== undefined && invoice.total !== null) {
     total = invoice.total;
   }
-  // If we still don't have a total, try to calculate from subtotal + taxes
+  else if (invoice.totalAmount !== undefined && invoice.totalAmount !== null) {
+    total = invoice.totalAmount;
+  }
+  // If total is still undefined, try to calculate from subtotal + taxes
   else if (invoice.subtotal !== undefined && invoice.subtotal !== null) {
-    // Convert subtotal to number
+    // Convert subtotal to number, ensuring we handle both string and number values
     const subtotal = typeof invoice.subtotal === 'string' 
-      ? parseFloat(invoice.subtotal) 
+      ? parseFloat(invoice.subtotal || '0') 
       : (invoice.subtotal || 0);
       
     // Get tax values, defaulting to 0 for any missing values
@@ -86,13 +85,17 @@ export function getInvoiceTotal(invoice: any): number {
     // Calculate total  
     total = subtotal + cgst + sgst + igst;
   }
-  // Final fallback
+  // Final fallback - search in invoice.invoice if it's a nested structure
+  else if (invoice.invoice) {
+    return getInvoiceTotal(invoice.invoice);
+  }
+  // Absolute final fallback
   else {
     total = 0;
   }
   
-  // Convert total to a number
-  const numericTotal = typeof total === 'string' ? parseFloat(total) : (total || 0);
+  // Convert to number if it's a string
+  const numericTotal = typeof total === 'string' ? parseFloat(total || '0') : (total || 0);
   
   // Make sure we don't return NaN
   return isNaN(numericTotal) ? 0 : numericTotal;
