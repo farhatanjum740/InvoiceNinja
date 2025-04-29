@@ -226,7 +226,13 @@ export function InvoiceTemplateRenderer({
             </div>
             <div className="text-right">
               <h2 className="font-bold">{company.name}</h2>
-              <p className="text-sm text-gray-500">GSTIN: {company.gstin}</p>
+              <p className="text-sm">{company.address || ''}</p>
+              <p className="text-sm">
+                {company.city || ''}
+                {company.state ? `, ${company.state}` : ''}
+                {company.pincode ? ` - ${company.pincode}` : ''}
+              </p>
+              <p className="text-sm text-gray-500">{company.gstin ? `GSTIN: ${company.gstin}` : ''}</p>
             </div>
           </div>
           
@@ -374,7 +380,12 @@ export function InvoiceTemplateRenderer({
               </div>
               <div className="text-right">
                 <h2 className="font-bold font-serif">{company.name}</h2>
-                <p className="text-sm text-gray-600">{company.address}</p>
+                <p className="text-sm text-gray-600">{company.address || ''}</p>
+                <p className="text-sm text-gray-600">
+                  {company.city || ''}
+                  {company.state ? `, ${company.state}` : ''}
+                  {company.pincode ? ` - ${company.pincode}` : ''}
+                </p>
                 <p className="text-sm text-gray-600">{company.gstin && `GSTIN: ${company.gstin}`}</p>
               </div>
             </div>
@@ -389,8 +400,8 @@ export function InvoiceTemplateRenderer({
               <p className="text-sm">
                 {customer.billingCity || ''}
                 {customer.billingState ? `, ${customer.billingState}` : ''}
+                {customer.billingPincode ? ` - ${customer.billingPincode}` : ''}
               </p>
-              <p className="text-sm">{customer.billingPincode || ''}</p>
               {customer.gstin && <p className="text-sm mt-2">GSTIN: {customer.gstin}</p>}
             </div>
             
@@ -534,7 +545,11 @@ export function InvoiceTemplateRenderer({
             <div className="text-right">
               <h2 className="font-bold text-xl">{company.name}</h2>
               <p className="text-sm text-gray-600">{company.address || ''}</p>
-              <p className="text-sm text-gray-600">{company.city || ''}, {company.state || ''} {company.pincode || ''}</p>
+              <p className="text-sm text-gray-600">
+                {company.city || ''}
+                {company.state ? `, ${company.state}` : ''}
+                {company.pincode ? ` - ${company.pincode}` : ''}
+              </p>
               {company.gstin && <p className="text-sm text-gray-600">GSTIN: {company.gstin}</p>}
             </div>
           </div>
@@ -545,8 +560,11 @@ export function InvoiceTemplateRenderer({
               <h3 className="text-gray-500 text-sm font-medium">BILL TO</h3>
               <p className="font-semibold mt-2">{customer.name || ''}</p>
               <p className="text-gray-600 text-sm">{customer.billingAddress || ''}</p>
-              <p className="text-gray-600 text-sm">{customer.billingCity || ''}, {customer.billingState || ''}</p>
-              <p className="text-gray-600 text-sm">{customer.billingPincode || ''}</p>
+              <p className="text-gray-600 text-sm">
+                {customer.billingCity || ''}
+                {customer.billingState ? `, ${customer.billingState}` : ''}
+                {customer.billingPincode ? ` - ${customer.billingPincode}` : ''}
+              </p>
               {customer.gstin && <p className="text-gray-600 text-sm mt-2">GSTIN: {customer.gstin}</p>}
             </div>
             
