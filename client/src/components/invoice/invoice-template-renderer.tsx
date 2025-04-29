@@ -585,14 +585,14 @@ export function InvoiceTemplateRenderer({
               <tbody>
                 {items.map((item, index) => (
                   <tr key={index} className="border-b">
-                    <td className="py-4">{item.description}</td>
+                    <td className="py-4">{item.description || '-'}</td>
                     <td className="py-4">{item.hsnCode || '-'}</td>
-                    <td className="py-4 text-right">{item.quantity} {item.unit}</td>
+                    <td className="py-4 text-right">{item.quantity || 0} {item.unit || 'Piece'}</td>
                     <td className="py-4 text-right">{typeof item.rate === 'number' ? 
-                      formatCurrency(item.rate) : item.rate}</td>
-                    <td className="py-4 text-right">{item.gstRate}%</td>
+                      formatCurrency(item.rate) : (item.rate ? formatCurrency(parseFloat(item.rate)) : '₹0.00')}</td>
+                    <td className="py-4 text-right">{item.gstRate || 0}%</td>
                     <td className="py-4 text-right font-medium">{typeof item.amount === 'number' ? 
-                      formatCurrency(item.amount) : item.amount}</td>
+                      formatCurrency(item.amount) : (item.amount ? formatCurrency(parseFloat(item.amount)) : '₹0.00')}</td>
                   </tr>
                 ))}
               </tbody>

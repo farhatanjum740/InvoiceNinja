@@ -1074,9 +1074,17 @@ export class SupabaseStorage implements IStorage {
   
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
     try {
+      // First fetch invoice items with product information using a join
       const { data, error } = await supabase
         .from('invoice_items')
-        .select('*')
+        .select(`
+          *,
+          products:product_id (
+            name,
+            unit,
+            hsn_code
+          )
+        `)
         .eq('invoice_id', invoiceId);
       
       if (error) {
@@ -1084,18 +1092,24 @@ export class SupabaseStorage implements IStorage {
         return [];
       }
       
-      return data.map(item => ({
-        id: item.id,
-        invoiceId: item.invoice_id,
-        description: item.description,
-        hsnCode: item.hsn_code,
-        quantity: item.quantity,
-        rate: item.rate,
-        gstRate: item.gst_rate,
-        amount: item.amount,
-        unit: item.unit || 'Piece',
-        productId: item.product_id
-      }));
+      return data.map(item => {
+        // Get product information if available
+        const product = item.products || {};
+        
+        return {
+          id: item.id,
+          invoiceId: item.invoice_id,
+          description: item.description,
+          hsnCode: item.hsn_code || product.hsn_code || '',
+          quantity: item.quantity,
+          rate: item.rate,
+          gstRate: item.gst_rate,
+          amount: item.amount,
+          // Use product unit if available, fall back to item.unit, or default to 'Piece'
+          unit: product.unit || item.unit || 'Piece',
+          productId: item.product_id
+        };
+      });
     } catch (error) {
       console.error("Error in getInvoiceItems:", error);
       return [];
