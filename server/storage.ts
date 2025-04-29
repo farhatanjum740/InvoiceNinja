@@ -9,7 +9,7 @@ import {
   Invoice, InsertInvoice,
   InvoiceItem, InsertInvoiceItem
 } from '@shared/schema';
-import { supabase, pool } from './db';
+import { supabase, pool, syncDirectDatabaseChange } from './db';
 
 export interface IStorage {
   // User management
@@ -470,6 +470,10 @@ export class SupabaseStorage implements IStorage {
         if (result.rows.length > 0) {
           const newCustomer = result.rows[0];
           console.log("Successfully created customer with direct SQL using ID:", nextId);
+          
+          // Sync the direct database change with Supabase
+          await syncDirectDatabaseChange('customers');
+          
           return {
             id: newCustomer.id,
             name: newCustomer.name,
@@ -718,6 +722,10 @@ export class SupabaseStorage implements IStorage {
         if (result.rows.length > 0) {
           const newProduct = result.rows[0];
           console.log("Successfully created product with direct SQL using ID:", nextId);
+          
+          // Sync the direct database change with Supabase
+          await syncDirectDatabaseChange('products');
+          
           return {
             id: newProduct.id,
             name: newProduct.name,

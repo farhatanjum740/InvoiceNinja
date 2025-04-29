@@ -139,3 +139,35 @@ export async function checkDatabaseConnection() {
     return false;
   }
 }
+
+// Function to notify Supabase of a direct database change
+export async function syncDirectDatabaseChange(table: string) {
+  try {
+    console.log(`Syncing direct database change for table: ${table}`);
+    
+    // Try the direct notification to PostgREST
+    try {
+      await pool.query("SELECT pg_notify('pgrst', 'reload schema');");
+      console.log(`Sent schema reload notification to PostgREST for table: ${table}`);
+    } catch (error) {
+      console.warn('Failed to send PostgREST notification:', error);
+    }
+    
+    // Force a refresh by querying the table
+    try {
+      const { error } = await supabase.from(table).select('id').limit(1);
+      if (error) {
+        console.warn(`Error refreshing Supabase cache for ${table}:`, error);
+      } else {
+        console.log(`Successfully refreshed Supabase cache for ${table}`);
+      }
+    } catch (error) {
+      console.error(`Failed to refresh Supabase cache for ${table}:`, error);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to sync direct database change:', error);
+    return false;
+  }
+}
