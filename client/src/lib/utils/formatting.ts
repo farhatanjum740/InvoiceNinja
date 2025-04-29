@@ -160,8 +160,13 @@ export function getInvoiceTotal(invoice: any): number {
       ? parseFloat(invoice.igst || '0') 
       : (invoice.igst || 0);
     
-    // Calculate total  
-    total = subtotal + cgst + sgst + igst;
+    // Get round-off value
+    const roundOff = typeof invoice.roundOff === 'string'
+      ? parseFloat(invoice.roundOff || '0')
+      : (invoice.roundOff || 0);
+      
+    // Calculate total including round-off  
+    total = subtotal + cgst + sgst + igst + roundOff;
   }
   // Final fallback - search in invoice.invoice if it's a nested structure
   else if (invoice.invoice) {

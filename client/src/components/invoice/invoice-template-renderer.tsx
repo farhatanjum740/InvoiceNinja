@@ -345,12 +345,30 @@ export function InvoiceTemplateRenderer({
                   </div>
                 )}
                 
+                {/* Round Off */}
+                {invoice.roundOff && invoice.roundOff !== 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Round Off:</span>
+                    <span>{typeof invoice.roundOff === 'number' ? 
+                      formatCurrency(invoice.roundOff) : invoice.roundOff}</span>
+                  </div>
+                )}
+                
                 <div className="flex justify-between pt-2 border-t font-medium">
                   <span className={cn(selectedColor.textColor)}>Total:</span>
                   <span className={cn(selectedColor.textColor)}>
                     {formatCurrency(getInvoiceTotal(invoice))}
                   </span>
                 </div>
+                
+                {/* Amount in words */}
+                {invoice.amountInWords && (
+                  <div className="flex mt-2 pt-1 border-t">
+                    <span className="text-xs italic">
+                      Amount in words: <span className="font-medium">{invoice.amountInWords}</span>
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -548,30 +566,57 @@ export function InvoiceTemplateRenderer({
               <h1 className={cn("text-3xl font-bold", selectedColor.textColor)}>INVOICE</h1>
               <p className="text-gray-500 mt-1">#{invoice.invoiceNumber}</p>
             </div>
-            <div className="text-right">
-              <h2 className="font-bold text-xl">{company.name}</h2>
-              <p className="text-sm text-gray-600">{company.address || ''}</p>
-              <p className="text-sm text-gray-600">
-                {company.city || ''}
-                {company.state ? `, ${company.state}` : ''}
-                {company.pincode ? ` - ${company.pincode}` : ''}
-              </p>
-              {company.gstin && <p className="text-sm text-gray-600">GSTIN: {company.gstin}</p>}
+            <div className="text-right flex items-start gap-4">
+              {company.logoUrl && (
+                <div className="w-16 h-16 overflow-hidden rounded border flex-shrink-0 bg-white">
+                  <img 
+                    src={company.logoUrl} 
+                    alt={`${company.name} logo`} 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              )}
+              <div>
+                <h2 className="font-bold text-xl">{company.name}</h2>
+                <p className="text-sm text-gray-600">{company.address || ''}</p>
+                <p className="text-sm text-gray-600">
+                  {company.city || ''}
+                  {company.state ? `, ${company.state}` : ''}
+                  {company.pincode ? ` - ${company.pincode}` : ''}
+                </p>
+                {company.gstin && <p className="text-sm text-gray-600">GSTIN: {company.gstin}</p>}
+              </div>
             </div>
           </div>
           
           {/* Customer and Invoice Info */}
           <div className="p-6 grid grid-cols-2 gap-6 border-b">
-            <div>
-              <h3 className="text-gray-500 text-sm font-medium">BILL TO</h3>
-              <p className="font-semibold mt-2">{customer.name || ''}</p>
-              <p className="text-gray-600 text-sm">{customer.billingAddress || ''}</p>
-              <p className="text-gray-600 text-sm">
-                {customer.billingCity || ''}
-                {customer.billingState ? `, ${customer.billingState}` : ''}
-                {customer.billingPincode ? ` - ${customer.billingPincode}` : ''}
-              </p>
-              {customer.gstin && <p className="text-gray-600 text-sm mt-2">GSTIN: {customer.gstin}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h3 className="text-gray-500 text-sm font-medium">BILL TO</h3>
+                <p className="font-semibold mt-2">{customer.name || ''}</p>
+                <p className="text-gray-600 text-sm">{customer.billingAddress || ''}</p>
+                <p className="text-gray-600 text-sm">
+                  {customer.billingCity || ''}
+                  {customer.billingState ? `, ${customer.billingState}` : ''}
+                  {customer.billingPincode ? ` - ${customer.billingPincode}` : ''}
+                </p>
+                {customer.gstin && <p className="text-gray-600 text-sm mt-2">GSTIN: {customer.gstin}</p>}
+              </div>
+              
+              <div>
+                <h3 className="text-gray-500 text-sm font-medium">SHIP TO</h3>
+                <p className="font-semibold mt-2">{customer.name || ''}</p>
+                <p className="text-gray-600 text-sm">{customer.shippingAddress || customer.billingAddress || ''}</p>
+                <p className="text-gray-600 text-sm">
+                  {customer.shippingCity || customer.billingCity || ''}
+                  {(customer.shippingState || customer.billingState) ? 
+                    `, ${customer.shippingState || customer.billingState}` : ''}
+                  {(customer.shippingPincode || customer.billingPincode) ? 
+                    ` - ${customer.shippingPincode || customer.billingPincode}` : ''}
+                </p>
+                {customer.phone && <p className="text-gray-600 text-sm mt-2">Phone: {customer.phone}</p>}
+              </div>
             </div>
             
             <div>
@@ -636,6 +681,19 @@ export function InvoiceTemplateRenderer({
           {/* Summary and Totals */}
           <div className="p-6 flex">
             <div className="flex-1">
+              {/* Bank account details */}
+              {(company.bankName || company.accountNumber || company.ifscCode) && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-md border">
+                  <h3 className="text-gray-500 text-sm font-medium mb-2">BANK DETAILS</h3>
+                  <div className="text-sm space-y-1">
+                    {company.bankName && <p><span className="font-medium">Bank:</span> {company.bankName}</p>}
+                    {company.accountNumber && <p><span className="font-medium">A/c No:</span> {company.accountNumber}</p>}
+                    {company.ifscCode && <p><span className="font-medium">IFSC:</span> {company.ifscCode}</p>}
+                    {company.accountType && <p><span className="font-medium">Type:</span> {company.accountType}</p>}
+                  </div>
+                </div>
+              )}
+              
               {invoice.notes && (
                 <div className="mb-4">
                   <h3 className="text-gray-500 text-sm font-medium mb-2">NOTES</h3>
@@ -683,13 +741,31 @@ export function InvoiceTemplateRenderer({
                         formatCurrency(invoice.igst) : invoice.igst}</span>
                     </div>
                   )}
+                  
+                  {/* Round Off */}
+                  {invoice.roundOff && parseFloat(String(invoice.roundOff)) !== 0 && (
+                    <div className="flex justify-between border-t pt-1">
+                      <span className="text-gray-600">Round Off:</span>
+                      <span>{typeof invoice.roundOff === 'number' ? 
+                        formatCurrency(invoice.roundOff) : invoice.roundOff}</span>
+                    </div>
+                  )}
                 </div>
                 
-                <div className={cn("px-4 py-3 flex justify-between items-center", selectedColor.bgColor, "text-white")}>
-                  <span className="font-medium">Total:</span>
-                  <span className="text-lg font-bold">
-                    {formatCurrency(getInvoiceTotal(invoice))}
-                  </span>
+                <div className={cn("px-4 py-3 flex flex-col", selectedColor.bgColor, "text-white")}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Total:</span>
+                    <span className="text-lg font-bold">
+                      {formatCurrency(getInvoiceTotal(invoice))}
+                    </span>
+                  </div>
+                  
+                  {/* Amount in words */}
+                  {invoice.amountInWords && (
+                    <div className="mt-1 text-xs opacity-90">
+                      Amount in words: {invoice.amountInWords}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
