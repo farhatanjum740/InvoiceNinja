@@ -1049,8 +1049,17 @@ export class SupabaseStorage implements IStorage {
               // Check for any missing products
               const missingProductIds = productIds.filter(id => !existingProductIds.includes(id));
               if (missingProductIds.length > 0) {
-                console.error("Products not found in the database:", missingProductIds);
-                throw new Error(`Products with IDs ${missingProductIds.join(', ')} do not exist in the database`);
+                console.warn("Products not found in the database:", missingProductIds);
+                
+                // Instead of throwing an error, set those product IDs to null
+                console.log("Setting non-existent product IDs to null...");
+                items = items.map(item => {
+                  if (item.productId && missingProductIds.includes(item.productId)) {
+                    console.log(`Setting product_id ${item.productId} to null for "${item.description}"`);
+                    return { ...item, productId: null };
+                  }
+                  return item;
+                });
               }
             }
           }
@@ -1093,8 +1102,8 @@ export class SupabaseStorage implements IStorage {
               hsn_code: item.hsnCode || null
             };
             
-            // Only set product_id if the product has been verified to exist
-            if (item.productId) {
+            // Only set product_id if it's provided in the item
+            if (item.productId !== undefined && item.productId !== null) {
               processedItem.product_id = item.productId;
             }
             
