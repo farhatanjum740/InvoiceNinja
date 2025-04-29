@@ -7,6 +7,7 @@ import { PersistentTabs } from "@/components/ui/persistent-tabs";
 import { InvoiceForm } from "@/components/invoice/invoice-form";
 import { InvoicePdf } from "@/components/invoice/invoice-pdf";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
@@ -60,12 +61,21 @@ export default function CreateInvoicePage() {
 
   // Function to handle successful invoice creation
   const handleInvoiceSuccess = () => {
+    // Invalidate the invoices cache so the list will refresh
+    queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+    
+    // Also invalidate dashboard stats as they include invoice counts
+    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+    
     toast({
       title: "Invoice created",
       description: "Your invoice has been created successfully.",
     });
+    
     // Clear the draft after successful creation
     localStorage.removeItem('invoice-draft');
+    
+    // Navigate to invoices page
     navigate("/invoices");
   };
 
