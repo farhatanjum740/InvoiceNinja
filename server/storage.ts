@@ -444,6 +444,67 @@ export class SupabaseStorage implements IStorage {
       return 1; // Default to 1 if there's an error
     }
   }
+  
+  // Helper to directly insert invoice items using SQL to bypass schema cache issues
+  private async insertInvoiceItemsDirect(items: any[]): Promise<boolean> {
+    try {
+      // Begin a transaction
+      await pool.query('BEGIN');
+      console.log('Started SQL transaction for direct invoice items insert');
+      
+      // Insert each item individually
+      for (const item of items) {
+        // Convert the item fields to an array of values
+        const itemValues = [
+          item.invoice_id,
+          item.product_id,
+          item.description,
+          item.unit || 'Piece', // Make sure we explicitly include the unit
+          item.quantity,
+          item.rate,
+          item.amount,
+          item.gst_rate,
+          item.hsn_code
+        ];
+        
+        // Execute the insert statement
+        const query = `
+          INSERT INTO invoice_items 
+          (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code) 
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING id;
+        `;
+        
+        const result = await pool.query(query, itemValues);
+        console.log(`Inserted invoice item with ID ${result.rows[0].id} directly via SQL`);
+      }
+      
+      // Commit the transaction
+      await pool.query('COMMIT');
+      console.log('Successfully committed invoice items transaction');
+      
+      // Attempt to notify PostgREST to refresh its schema
+      try {
+        await pool.query("SELECT pg_notify('pgrst', 'reload schema');");
+        console.log('Sent schema refresh notification after invoice items insert');
+      } catch (notifyError) {
+        console.warn('Failed to send schema refresh notification:', notifyError);
+      }
+      
+      return true;
+    } catch (error) {
+      // Rollback in case of error
+      try {
+        await pool.query('ROLLBACK');
+        console.error('Rolled back transaction due to error');
+      } catch (rollbackError) {
+        console.error('Error rolling back transaction:', rollbackError);
+      }
+      
+      console.error('Error directly inserting invoice items:', error);
+      throw error;
+    }
+  }
 
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
     try {
