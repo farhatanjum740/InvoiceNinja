@@ -875,19 +875,22 @@ export class SupabaseStorage implements IStorage {
       
       // Insert each invoice item
       for (const item of items) {
+        // Create the insert object without the unit field since it's causing issues with the schema cache
+        const insertObject: any = {
+          invoice_id: invoiceId,
+          description: item.description,
+          hsn_code: item.hsnCode || null,
+          quantity: item.quantity,
+          rate: item.rate,
+          gst_rate: item.gstRate,
+          amount: item.amount,
+          product_id: item.productId || null
+        };
+        
+        // Try without including the unit field
         const { error: itemError } = await supabase
           .from('invoice_items')
-          .insert({
-            invoice_id: invoiceId,
-            description: item.description,
-            hsn_code: item.hsnCode || null,
-            quantity: item.quantity,
-            rate: item.rate,
-            gst_rate: item.gstRate,
-            amount: item.amount,
-            unit: item.unit || 'Piece',
-            product_id: item.productId || null
-          });
+          .insert(insertObject);
         
         if (itemError) {
           console.error(`Error creating invoice item for invoice ${invoiceId}:`, itemError);
@@ -1057,19 +1060,21 @@ export class SupabaseStorage implements IStorage {
         throw new Error(`Invoice with ID ${item.invoiceId} does not exist`);
       }
       
+      // Create insert object without unit field
+      const insertObject: any = {
+        invoice_id: item.invoiceId,
+        description: item.description,
+        hsn_code: item.hsnCode || null,
+        quantity: item.quantity,
+        rate: item.rate,
+        gst_rate: item.gstRate,
+        amount: item.amount,
+        product_id: item.productId || null
+      };
+      
       const { data, error } = await supabase
         .from('invoice_items')
-        .insert({
-          invoice_id: item.invoiceId,
-          description: item.description,
-          hsn_code: item.hsnCode || null,
-          quantity: item.quantity,
-          rate: item.rate,
-          gst_rate: item.gstRate,
-          amount: item.amount,
-          unit: item.unit || 'Piece',
-          product_id: item.productId || null
-        })
+        .insert(insertObject)
         .select()
         .single();
       
@@ -1106,7 +1111,7 @@ export class SupabaseStorage implements IStorage {
       if (item.rate !== undefined) updateData.rate = item.rate;
       if (item.gstRate !== undefined) updateData.gst_rate = item.gstRate;
       if (item.amount !== undefined) updateData.amount = item.amount;
-      if (item.unit !== undefined) updateData.unit = item.unit;
+      // Skip unit field since it's causing schema cache issues
       if (item.productId !== undefined) updateData.product_id = item.productId;
       
       const { data, error } = await supabase
