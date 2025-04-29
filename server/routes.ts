@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { Server } from "http";
 import { z } from "zod";
-import { storage } from "./storage";
+import { storage } from "./simple-storage";
 import { setupAuth } from "./auth-supabase";
 import { supabase } from "./db";
 

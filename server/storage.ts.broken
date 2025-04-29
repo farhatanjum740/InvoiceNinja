@@ -293,10 +293,6 @@ export class SupabaseStorage implements IStorage {
         ifscCode: createdCompany.ifsc_code,
         logo: createdCompany.logo
       };
-    } catch (error) {
-      console.error("Error in createCompany:", error);
-      throw error;
-    }
   }
   
   async updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company | undefined> {
@@ -345,10 +341,6 @@ export class SupabaseStorage implements IStorage {
         ifscCode: data.ifsc_code,
         logo: data.logo
       };
-    } catch (error) {
-      console.error("Error in updateCompany:", error);
-      return undefined;
-    }
   }
   
   // Customer Management
@@ -381,10 +373,6 @@ export class SupabaseStorage implements IStorage {
         shippingPincode: c.shipping_pincode,
         sameAsShipping: c.same_as_shipping
       }));
-    } catch (error) {
-      console.error("Error in getCustomersByUserId:", error);
-      return [];
-    }
   }
   
   async getCustomer(id: number): Promise<Customer | undefined> {
@@ -416,10 +404,6 @@ export class SupabaseStorage implements IStorage {
         shippingPincode: data.shipping_pincode,
         sameAsShipping: data.same_as_shipping
       };
-    } catch (error) {
-      console.error("Error in getCustomer:", error);
-      return undefined;
-    }
   }
   
   // Helper function to get the next ID in sequence for a table
@@ -439,24 +423,36 @@ export class SupabaseStorage implements IStorage {
       
       const maxId = data?.length > 0 ? data[0].id : 0;
       return maxId + 1;
-    } catch (error) {
-      console.error(`Error in getNextId for ${tableName}:`, error);
-      return 1; // Default to 1 if there's an error
-    }
   }
   
   // Helper to directly insert invoice items using SQL to bypass schema cache issues
   private async insertInvoiceItemsDirect(items: any[], invoiceId: number): Promise<boolean> {
     try {
-      // First verify the invoice exists to prevent foreign key constraint violation
-      const checkResult = await pool.query('SELECT id FROM invoices WHERE id = $1', [invoiceId]);
+      // We'll use a retry mechanism to handle potential synchronization issues
+      // between Supabase and the direct database connection
+      let retries = 3;
+      let invoiceExists = false;
       
-      if (checkResult.rows.length === 0) {
-        console.error(`Invoice with ID ${invoiceId} does not exist in the database`);
-        throw new Error(`Invoice with ID ${invoiceId} not found`);
+      while (retries > 0 && !invoiceExists) {
+        // Verify the invoice exists to prevent foreign key constraint violation
+        const checkResult = await pool.query('SELECT id FROM invoices WHERE id = $1', [invoiceId]);
+        
+        if (checkResult.rows.length === 0) {
+          console.log(`Invoice with ID ${invoiceId} not found in the database, retrying... (${retries} attempts left)`);
+          retries--;
+          
+          if (retries === 0) {
+            console.error(`Invoice with ID ${invoiceId} not found after all retries`);
+            throw new Error(`Invoice with ID ${invoiceId} not found after multiple attempts`);
+          }
+          
+          // Wait before retrying to allow for synchronization
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          invoiceExists = true;
+          console.log(`Verified invoice ${invoiceId} exists before inserting items`);
+        }
       }
-      
-      console.log(`Verified invoice ${invoiceId} exists before inserting items`);
       
       // Begin a transaction
       await pool.query('BEGIN');
@@ -502,18 +498,6 @@ export class SupabaseStorage implements IStorage {
       }
       
       return true;
-    } catch (error) {
-      // Rollback in case of error
-      try {
-        await pool.query('ROLLBACK');
-        console.error('Rolled back transaction due to error');
-      } catch (rollbackError) {
-        console.error('Error rolling back transaction:', rollbackError);
-      }
-      
-      console.error('Error directly inserting invoice items:', error);
-      throw error;
-    }
   }
 
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
@@ -626,10 +610,6 @@ export class SupabaseStorage implements IStorage {
         shippingPincode: data.shipping_pincode,
         sameAsShipping: data.same_as_shipping
       };
-    } catch (error) {
-      console.error("Error in updateCustomer:", error);
-      return undefined;
-    }
   }
   
   async deleteCustomer(id: number): Promise<boolean> {
@@ -645,10 +625,6 @@ export class SupabaseStorage implements IStorage {
       }
       
       return true;
-    } catch (error) {
-      console.error("Error in deleteCustomer:", error);
-      return false;
-    }
   }
   
   // Product Management
@@ -674,10 +650,6 @@ export class SupabaseStorage implements IStorage {
         rate: p.rate,
         gstRate: p.gst_rate
       }));
-    } catch (error) {
-      console.error("Error in getProductsByUserId:", error);
-      return [];
-    }
   }
   
   async getProduct(id: number): Promise<Product | undefined> {
@@ -702,10 +674,6 @@ export class SupabaseStorage implements IStorage {
         rate: data.rate,
         gstRate: data.gst_rate
       };
-    } catch (error) {
-      console.error("Error in getProduct:", error);
-      return undefined;
-    }
   }
   
   async createProduct(product: InsertProduct): Promise<Product> {
@@ -789,10 +757,6 @@ export class SupabaseStorage implements IStorage {
         rate: data.rate,
         gstRate: data.gst_rate
       };
-    } catch (error) {
-      console.error("Error in updateProduct:", error);
-      return undefined;
-    }
   }
   
   async deleteProduct(id: number): Promise<boolean> {
@@ -808,10 +772,6 @@ export class SupabaseStorage implements IStorage {
       }
       
       return true;
-    } catch (error) {
-      console.error("Error in deleteProduct:", error);
-      return false;
-    }
   }
   
   // Invoice Management
@@ -846,10 +806,6 @@ export class SupabaseStorage implements IStorage {
         templateId: inv.template_id || 'standard',
         colorTheme: inv.color_theme || 'blue'
       }));
-    } catch (error) {
-      console.error("Error in getInvoicesByUserId:", error);
-      return [];
-    }
   }
   
   async getInvoice(id: number): Promise<Invoice | undefined> {
@@ -883,10 +839,6 @@ export class SupabaseStorage implements IStorage {
         templateId: data.template_id || 'standard',
         colorTheme: data.color_theme || 'blue'
       };
-    } catch (error) {
-      console.error("Error in getInvoice:", error);
-      return undefined;
-    }
   }
   
   async getInvoiceWithItems(id: number): Promise<{ invoice: Invoice; items: InvoiceItem[] }> {
@@ -948,10 +900,118 @@ export class SupabaseStorage implements IStorage {
       }));
       
       return { invoice, items };
-    } catch (error) {
-      console.error("Error in getInvoiceWithItems:", error);
-      throw error;
-    }
+  }
+  
+  // Direct SQL method for creating an invoice with items in a single transaction
+  private async createInvoiceWithItemsDirect(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
+    try {
+      console.log("Using direct SQL transaction approach for invoice creation");
+      
+      // Start a transaction
+      await pool.query('BEGIN');
+      console.log("Started SQL transaction for invoice creation");
+      
+      // Insert the invoice first
+      const invoiceQuery = `
+        INSERT INTO invoices 
+        (user_id, customer_id, invoice_number, invoice_date, due_date, notes, status, 
+        subtotal, cgst, sgst, igst, total, terms_and_conditions, template_id, color_theme)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        RETURNING id, invoice_number, invoice_date, due_date, status, subtotal, cgst, sgst, igst, total;
+      `;
+      
+      const invoiceValues = [
+        invoice.userId,
+        invoice.customerId,
+        invoice.invoiceNumber || `INV-${Date.now()}`,
+        invoice.invoiceDate,
+        invoice.dueDate || null,
+        invoice.notes || '',
+        invoice.status || 'draft',
+        invoice.subtotal || '0.00',
+        invoice.cgst || '0.00',
+        invoice.sgst || '0.00',
+        invoice.igst || '0.00',
+        invoice.total || '0.00',
+        invoice.termsAndConditions || '',
+        invoice.templateId || 'standard',
+        invoice.colorTheme || 'blue'
+      ];
+      
+      const invoiceResult = await pool.query(invoiceQuery, invoiceValues);
+      const invoiceData = invoiceResult.rows[0];
+      const invoiceId = invoiceData.id;
+      console.log(`Created invoice with ID ${invoiceId} via direct SQL`);
+      
+      // Insert all items within the same transaction
+      if (items.length > 0) {
+        console.log(`Inserting ${items.length} invoice items via direct SQL...`);
+        
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          console.log(`Processing item ${i}:`, JSON.stringify(item, null, 2));
+          
+          // Safely handle potentially undefined fields
+          const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity ?? 1);
+          const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate ?? 0);
+          const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
+          const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate ?? 0);
+          
+          const itemQuery = `
+            INSERT INTO invoice_items 
+            (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id;
+          `;
+          
+          const itemValues = [
+            invoiceId,
+            item.productId || null,
+            item.description || `Item ${i + 1}`,
+            item.unit || 'Piece',
+            isNaN(quantity) ? 1 : quantity,
+            isNaN(rate) ? 0 : rate,
+            isNaN(amount) ? 0 : amount,
+            isNaN(gstRate) ? 0 : gstRate,
+            item.hsnCode || null
+          ];
+          
+          const itemResult = await pool.query(itemQuery, itemValues);
+          console.log(`Inserted invoice item with ID ${itemResult.rows[0].id}`);
+        }
+      }
+      
+      // Commit the transaction
+      await pool.query('COMMIT');
+      console.log("Successfully committed invoice transaction");
+      
+      // Notify PostgREST about the changes
+      try {
+        await pool.query("SELECT pg_notify('pgrst', 'reload schema');");
+        console.log("Sent schema refresh notification after invoice creation");
+      } catch (notifyError) {
+        console.warn("Failed to send schema refresh notification:", notifyError);
+      }
+      
+      // Return the created invoice
+      return {
+        id: invoiceId,
+        userId: invoice.userId,
+        customerId: invoice.customerId,
+        invoiceNumber: invoiceData.invoice_number,
+        invoiceDate: invoiceData.invoice_date,
+        dueDate: invoiceData.due_date,
+        notes: invoice.notes || null,
+        status: invoiceData.status,
+        subtotal: invoiceData.subtotal,
+        cgst: invoiceData.cgst || '0.00',
+        sgst: invoiceData.sgst || '0.00',
+        igst: invoiceData.igst || '0.00',
+        total: invoiceData.total,
+        termsAndConditions: invoice.termsAndConditions || null,
+        templateId: invoice.templateId || 'standard',
+        colorTheme: invoice.colorTheme || 'blue'
+      };
   }
   
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
@@ -965,42 +1025,41 @@ export class SupabaseStorage implements IStorage {
       throw new Error("Cannot create invoice: Invalid invoice data (missing userId or customerId)");
     }
     
-    console.log("Starting invoice creation through Supabase with", items.length, "items");
+    console.log("Attempting to create invoice with", items.length, "items");
 
     try {
-      // Prepare invoice data for Supabase
-      const supabaseInvoice = {
-        user_id: invoice.userId,
-        customer_id: invoice.customerId,
-        invoice_number: invoice.invoiceNumber || `INV-${Date.now()}`,
-        invoice_date: invoice.invoiceDate,
-        due_date: invoice.dueDate || null,
-        notes: invoice.notes || '',
-        status: invoice.status || 'draft',
-        subtotal: invoice.subtotal || '0.00',
-        cgst: invoice.cgst || '0.00',
-        sgst: invoice.sgst || '0.00',
-        igst: invoice.igst || '0.00',
-        total: invoice.total || '0.00',
-        terms_and_conditions: invoice.termsAndConditions || '',
-        template_id: invoice.templateId || 'standard',
-        color_theme: invoice.colorTheme || 'blue'
-      };
-      
-      // Insert the invoice through Supabase
-      const { data: invoiceData, error: invoiceError } = await supabase
-        .from('invoices')
-        .insert(supabaseInvoice)
-        .select('id')
-        .single();
-      
-      if (invoiceError) {
-        console.error("Supabase invoice insert error:", invoiceError);
-        throw new Error(`Failed to create invoice: ${invoiceError.message}`);
+      // Pre-validate any product references
+      if (items.length > 0) {
+        const productIds = items.filter(item => item.productId !== undefined).map(item => item.productId);
+        
+        if (productIds.length > 0) {
+          console.log("Prevalidating product IDs:", productIds);
+          
+          const { data: existingProducts, error: productError } = await supabase
+            .from('products')
+            .select('id')
+            .in('id', productIds);
+          
+          if (productError) {
+            console.error("Error checking products:", productError);
+            throw new Error(`Failed to verify products: ${productError.message}`);
+          }
+          
+          const existingProductIds = existingProducts.map(p => p.id);
+          
+          // Check if all product IDs exist
+          const missingProducts = productIds.filter(id => !existingProductIds.includes(id));
+          if (missingProducts.length > 0) {
+            console.error("Some products do not exist:", missingProducts);
+            throw new Error(`Some products do not exist: ${missingProducts.join(', ')}`);
+          }
+        }
       }
       
-      const invoiceId = invoiceData.id;
-      console.log("Created invoice with ID:", invoiceId, "via Supabase");
+      // Given the past issues with schema cache and foreign key constraints, 
+      // let's use the direct SQL approach which has better transactional guarantees
+      console.log("Using transaction-based invoice creation method");
+      return await this.createInvoiceWithItemsDirect(invoice, items);
       
       // Verify all products exist before creating invoice items
       if (items.some(item => item.productId)) {
@@ -1231,10 +1290,6 @@ export class SupabaseStorage implements IStorage {
         templateId: completeInvoice.template_id || 'standard',
         colorTheme: completeInvoice.color_theme || 'blue'
       };
-    } catch (error) {
-      console.error("Error creating invoice via Supabase:", error);
-      throw error;
-    }
   }
   
   async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
@@ -1286,10 +1341,6 @@ export class SupabaseStorage implements IStorage {
         templateId: data.template_id || 'standard',
         colorTheme: data.color_theme || 'blue'
       };
-    } catch (error) {
-      console.error("Error in updateInvoice:", error);
-      return undefined;
-    }
   }
   
   async deleteInvoice(id: number): Promise<boolean> {
@@ -1317,10 +1368,6 @@ export class SupabaseStorage implements IStorage {
       }
       
       return true;
-    } catch (error) {
-      console.error("Error in deleteInvoice:", error);
-      return false;
-    }
   }
   
   // Invoice Item Management
@@ -1348,10 +1395,6 @@ export class SupabaseStorage implements IStorage {
         gstRate: item.gst_rate,
         hsnCode: item.hsn_code || null
       }));
-    } catch (error) {
-      console.error("Error in getInvoiceItems:", error);
-      return [];
-    }
   }
   
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
@@ -1389,10 +1432,6 @@ export class SupabaseStorage implements IStorage {
         gstRate: data.gst_rate,
         hsnCode: data.hsn_code || null
       };
-    } catch (error) {
-      console.error("Error in addInvoiceItem:", error);
-      throw error;
-    }
   }
   
   async updateInvoiceItem(id: number, item: Partial<InsertInvoiceItem>): Promise<InvoiceItem | undefined> {
@@ -1432,10 +1471,6 @@ export class SupabaseStorage implements IStorage {
         gstRate: data.gst_rate,
         hsnCode: data.hsn_code || null
       };
-    } catch (error) {
-      console.error("Error in updateInvoiceItem:", error);
-      return undefined;
-    }
   }
   
   async deleteInvoiceItem(id: number): Promise<boolean> {
@@ -1451,10 +1486,6 @@ export class SupabaseStorage implements IStorage {
       }
       
       return true;
-    } catch (error) {
-      console.error("Error in deleteInvoiceItem:", error);
-      return false;
-    }
   }
   
   // Analytics
@@ -1502,15 +1533,6 @@ export class SupabaseStorage implements IStorage {
         unpaidInvoices,
         totalCustomers: customerCount || 0
       };
-    } catch (error) {
-      console.error("Error in getInvoiceStats:", error);
-      return {
-        totalInvoices: 0,
-        totalRevenue: 0,
-        unpaidInvoices: 0,
-        totalCustomers: 0
-      };
-    }
   }
 }
 

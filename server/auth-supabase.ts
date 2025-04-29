@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction, Express } from "express";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
-import { storage } from "./storage";
+import { storage } from "./simple-storage";
 import { supabase } from "./db";
 import session from "express-session";
 
