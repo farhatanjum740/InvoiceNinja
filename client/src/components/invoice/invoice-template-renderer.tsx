@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/utils/formatting";
+import { formatCurrency, formatDate, getInvoiceTotal } from "@/lib/utils/formatting";
 
 interface InvoiceTemplateRendererProps {
   templateId: string;
@@ -63,19 +63,7 @@ export function InvoiceTemplateRenderer({
 
   const selectedColor = colorStyles[colorTheme] || colorStyles.blue;
   
-  // Format the invoice date
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return new Intl.DateTimeFormat('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      }).format(date);
-    } catch (e) {
-      return dateString;
-    }
-  };
+  // Removed local formatDate function as we're now importing it
 
   // Render template based on templateId
   switch (templateId) {
@@ -216,8 +204,7 @@ export function InvoiceTemplateRenderer({
                 
                 <div className={cn("p-4 text-white flex justify-between items-center", selectedColor.bgColor)}>
                   <span className="font-medium">Total:</span>
-                  <span className="text-lg font-bold">{typeof invoice.total === 'number' ? 
-                    formatCurrency(invoice.total) : invoice.total}</span>
+                  <span className="text-lg font-bold">{formatCurrency(getInvoiceTotal(invoice))}</span>
                 </div>
               </div>
             </div>
@@ -341,8 +328,9 @@ export function InvoiceTemplateRenderer({
                 
                 <div className="flex justify-between pt-2 border-t font-medium">
                   <span className={cn(selectedColor.textColor)}>Total:</span>
-                  <span className={cn(selectedColor.textColor)}>{typeof invoice.total === 'number' ? 
-                    formatCurrency(invoice.total) : invoice.total}</span>
+                  <span className={cn(selectedColor.textColor)}>
+                    {formatCurrency(getInvoiceTotal(invoice))}
+                  </span>
                 </div>
               </div>
             </div>
@@ -512,8 +500,9 @@ export function InvoiceTemplateRenderer({
                   
                   <tr className={cn(selectedColor.bgColor, "text-white")}>
                     <td className="p-3 font-serif font-semibold">TOTAL:</td>
-                    <td className="p-3 text-right font-bold">{typeof invoice.total === 'number' ? 
-                      formatCurrency(invoice.total) : invoice.total}</td>
+                    <td className="p-3 text-right font-bold">
+                      {formatCurrency(getInvoiceTotal(invoice))}
+                    </td>
                   </tr>
                 </tbody>
               </table>
