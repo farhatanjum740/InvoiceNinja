@@ -3,6 +3,7 @@ import { Server } from "http";
 import { z } from "zod";
 import { storage } from "./storage";
 import { setupAuth } from "./auth-supabase";
+import { supabase } from "./db";
 
 // Create and configure the HTTP server
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -379,12 +380,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       // Log the received invoice data for debugging
-      const { invoice, items } = req.body;
+      const { invoice } = req.body;
+      let { items } = req.body;
       console.log("Attempting to create invoice with", items?.length || 0, "items");
       
       // Validate that we have items
       if (!items || items.length === 0) {
         return res.status(400).json({ error: "No invoice items provided" });
+      }
+      
+      // PREVALIDATION: Check if all product IDs exist in the database
+      const productIds = items
+        .map((item: any) => item.productId)
+        .filter((id: any) => id !== null && id !== undefined);
+      
+      if (productIds.length > 0) {
+        console.log("Prevalidating product IDs:", productIds);
+        
+        try {
+          const { data, error } = await supabase
+            .from('products')
+            .select('id')
+            .in('id', productIds);
+          
+          if (error) {
+            console.error("Error checking product existence:", error);
+          } else if (data) {
+            const existingProductIds = data.map((product: any) => product.id);
+            const missingProductIds = productIds.filter((id: any) => !existingProductIds.includes(id));
+            
+            if (missingProductIds.length > 0) {
+              console.warn(`Products with IDs ${missingProductIds.join(', ')} do not exist, will set to null`);
+              
+              // Set non-existent product IDs to null to avoid foreign key constraint errors
+              const updatedItems = items.map((item: any) => {
+                if (item.productId && missingProductIds.includes(item.productId)) {
+                  console.log(`Setting product_id ${item.productId} to null for item "${item.description}"`);
+                  return { ...item, productId: null };
+                }
+                return item;
+              });
+              
+              // Replace items with updated version
+              items = updatedItems;
+            }
+          }
+        } catch (productCheckError) {
+          console.error("Error during product validation:", productCheckError);
+          // Continue with creation, letting storage layer handle any errors
+        }
       }
       
       // Ensure user ID is set
