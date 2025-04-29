@@ -844,6 +844,26 @@ export class SupabaseStorage implements IStorage {
   private async createInvoiceFallback(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
     try {
       // Start by inserting the invoice with only the fields that exist in the schema
+      // Log the invoice data for debugging
+      console.log("Invoice data received:", { 
+        userId: invoice.userId,
+        customerId: invoice.customerId,
+        invoiceNumber: invoice.invoiceNumber,
+        total: typeof invoice.total === 'undefined' ? 'undefined' : invoice.total,
+        totalAmount: typeof invoice.totalAmount === 'undefined' ? 'undefined' : invoice.totalAmount
+      });
+      
+      // Determine total value properly
+      let totalValue = '0.00';
+      
+      if (invoice.total) {
+        totalValue = invoice.total.toString();
+      } else if (invoice.totalAmount) {
+        totalValue = invoice.totalAmount.toString();
+      }
+      
+      console.log("Using total value:", totalValue);
+      
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
@@ -855,7 +875,7 @@ export class SupabaseStorage implements IStorage {
           status: invoice.status || 'DRAFT',
           notes: invoice.notes || null,
           terms_and_conditions: invoice.termsAndConditions || null,
-          total: invoice.totalAmount ? invoice.totalAmount.toString() : '0',
+          total: totalValue,
           subtotal: invoice.subtotal ? invoice.subtotal.toString() : '0',
           cgst: invoice.cgst ? invoice.cgst.toString() : null,
           sgst: invoice.sgst ? invoice.sgst.toString() : null,
@@ -945,7 +965,14 @@ export class SupabaseStorage implements IStorage {
       if (invoice.status !== undefined) updateData.status = invoice.status;
       if (invoice.notes !== undefined) updateData.notes = invoice.notes;
       if (invoice.termsAndConditions !== undefined) updateData.terms_and_conditions = invoice.termsAndConditions;
-      if (invoice.totalAmount !== undefined) updateData.total = invoice.totalAmount.toString();
+      
+      // Handle total field - use either total or totalAmount
+      if (invoice.total !== undefined) {
+        updateData.total = invoice.total.toString();
+      } else if (invoice.totalAmount !== undefined) {
+        updateData.total = invoice.totalAmount.toString();
+      }
+      
       if (invoice.subtotal !== undefined) updateData.subtotal = invoice.subtotal.toString();
       if (invoice.cgst !== undefined) updateData.cgst = invoice.cgst.toString();
       if (invoice.sgst !== undefined) updateData.sgst = invoice.sgst.toString();
