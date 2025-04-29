@@ -30,37 +30,9 @@ export default function InvoicesPage() {
     queryKey: ["/api/invoices"],
   });
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat("en-IN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    }).format(date);
-  };
+  // Use the imported formatDateUtil function
 
-  const formatAmount = (amount: any) => {
-    // Handle cases where amount is undefined, null, NaN, or a string
-    if (amount === undefined || amount === null) {
-      return "₹0.00";
-    }
-    
-    // Convert to number if it's a string
-    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    
-    // Check if it's a valid number
-    if (isNaN(numAmount)) {
-      return "₹0.00";
-    }
-    
-    // Use the correct currency format for Indian Rupees
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(numAmount);
-  };
+  // We now use the imported formatCurrency and formatInvoiceTotal functions
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
@@ -682,13 +654,13 @@ export default function InvoicesPage() {
                                     {invoice.customerName}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                    {formatDate(invoice.invoiceDate)}
+                                    {formatDateUtil(invoice.invoiceDate)}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                    {invoice.dueDate ? formatDate(invoice.dueDate) : "-"}
+                                    {invoice.dueDate ? formatDateUtil(invoice.dueDate) : "-"}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                    {formatAmount(invoice.total)}
+                                    {formatInvoiceTotal(invoice)}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     {getStatusBadge(invoice.status)}
