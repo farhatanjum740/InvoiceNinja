@@ -1084,29 +1084,94 @@ export class SupabaseStorage implements IStorage {
       
       console.log(`Inserting ${supabaseItems.length} invoice items via Supabase...`);
       
-      // Insert all items through Supabase
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('invoice_items')
-        .insert(supabaseItems)
-        .select('id');
-      
-      if (itemsError) {
-        console.error("Supabase invoice items insert error:", itemsError);
+      try {
+        // First attempt - Supabase API
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('invoice_items')
+          .insert(supabaseItems)
+          .select('id');
         
-        // Try to clean up the invoice if items insertion fails
-        const { error: deleteError } = await supabase
-          .from('invoices')
-          .delete()
-          .eq('id', invoiceId);
+        if (itemsError) {
+          // Check if it's a schema cache issue with the 'unit' column
+          if (itemsError.message && (
+              itemsError.message.includes('unit') || 
+              itemsError.message.includes('schema cache')
+            )) {
+            console.warn("Detected schema cache issue. Falling back to direct SQL insertion:", itemsError.message);
+            
+            // Use our direct SQL helper to bypass Supabase schema cache issues
+            const success = await this.insertInvoiceItemsDirect(supabaseItems);
+            
+            if (success) {
+              console.log(`Successfully inserted ${supabaseItems.length} invoice items via direct SQL`);
+            } else {
+              throw new Error("Failed to insert invoice items via direct SQL");
+            }
+          } else {
+            console.error("Supabase invoice items insert error:", itemsError);
+            
+            // Try to clean up the invoice if items insertion fails
+            const { error: deleteError } = await supabase
+              .from('invoices')
+              .delete()
+              .eq('id', invoiceId);
+              
+            if (deleteError) {
+              console.error("Error deleting invoice after items insertion failure:", deleteError);
+            }
+            
+            throw new Error(`Failed to create invoice items: ${itemsError.message}`);
+          }
+        } else {
+          console.log(`Successfully created ${itemsData.length} invoice items for invoice #${invoiceId} via Supabase API`);
+        }
+      } catch (insertError: any) {
+        // If we have a specific error that's not the schema cache issue
+        if (insertError.message && !insertError.message.includes('schema cache')) {
+          // Clean up the invoice before rethrowing the error
+          console.error("Error inserting invoice items:", insertError.message);
+          try {
+            const { error: deleteError } = await supabase
+              .from('invoices')
+              .delete()
+              .eq('id', invoiceId);
+              
+            if (deleteError) {
+              console.error("Error cleaning up invoice:", deleteError);
+            } else {
+              console.log(`Cleaned up invoice #${invoiceId} after items insertion failure`);
+            }
+          } catch (cleanupError) {
+            console.error("Error during invoice cleanup:", cleanupError);
+          }
           
-        if (deleteError) {
-          console.error("Error deleting invoice after items insertion failure:", deleteError);
+          throw insertError;
         }
         
-        throw new Error(`Failed to create invoice items: ${itemsError.message}`);
+        // As a last resort, try direct SQL insertion
+        console.warn("Falling back to direct SQL insertion after error:", insertError.message);
+        try {
+          const success = await this.insertInvoiceItemsDirect(supabaseItems);
+          if (!success) {
+            throw new Error("Failed to insert invoice items via direct SQL");
+          }
+          console.log(`Successfully inserted ${supabaseItems.length} invoice items via direct SQL fallback`);
+        } catch (directSqlError) {
+          console.error("Direct SQL insertion failed:", directSqlError);
+          
+          // Clean up the invoice
+          const { error: deleteError } = await supabase
+            .from('invoices')
+            .delete()
+            .eq('id', invoiceId);
+            
+          if (deleteError) {
+            console.error("Error deleting invoice after direct SQL failure:", deleteError);
+          }
+          
+          throw new Error(`Failed to create invoice items: ${directSqlError.message || 'Unknown error'}`);
+        }
       }
-      
-      console.log(`Successfully created ${itemsData.length} invoice items for invoice #${invoiceId} via Supabase`);
       
       // Get the complete invoice data for return
       const { data: completeInvoice, error: fetchError } = await supabase
