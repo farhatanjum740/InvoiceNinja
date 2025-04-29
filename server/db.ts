@@ -43,6 +43,14 @@ export async function refreshSupabaseSchemaCache() {
           } else {
             console.log('Unit column already exists in the database');
           }
+          
+          // Notify PostgREST to reload schema
+          try {
+            await pool.query("SELECT pg_notify('pgrst', 'reload schema');");
+            console.log("Sent schema reload notification to PostgREST");
+          } catch (notifyError) {
+            console.warn("Could not notify PostgREST to reload schema:", notifyError);
+          }
         } catch (sqlError) {
           console.error('Error executing SQL:', sqlError);
         } finally {
@@ -60,6 +68,18 @@ export async function refreshSupabaseSchemaCache() {
       console.log('Executed query to refresh schema cache');
     } catch (error) {
       console.error('Schema refresh query failed:', error);
+    }
+    
+    // Try to use Supabase RPC to reload schema cache
+    try {
+      const { error } = await supabase.rpc('reload_schema_cache');
+      if (error) {
+        console.warn("Supabase RPC reload_schema_cache error:", error);
+      } else {
+        console.log("Successfully called Supabase RPC reload_schema_cache");
+      }
+    } catch (rpcError) {
+      console.warn("Error calling Supabase RPC reload_schema_cache:", rpcError);
     }
     
     return true;

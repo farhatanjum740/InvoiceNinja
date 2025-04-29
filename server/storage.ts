@@ -759,6 +759,14 @@ export class SupabaseStorage implements IStorage {
   
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
     try {
+      // Attempt to force refresh the schema cache before fetching invoices
+      try {
+        await refreshSupabaseSchemaCache();
+        await supabase.rpc('reload_schema_cache').catch(e => console.warn("RPC cache refresh failed:", e));
+      } catch (cacheError) {
+        console.warn("Schema cache refresh during getInvoicesByUserId failed:", cacheError);
+      }
+      
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
@@ -766,7 +774,45 @@ export class SupabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase invoices fetch error:", error);
-        return [];
+        
+        // Try falling back to direct SQL query
+        console.log("Attempting direct SQL fallback for invoice list");
+        try {
+          const pool = await this.getDirectDbConnection();
+          const result = await pool.query(`
+            SELECT * FROM invoices WHERE user_id = $1
+          `, [userId]);
+          
+          await pool.end();
+          
+          if (result.rows && result.rows.length > 0) {
+            console.log(`Found ${result.rows.length} invoices via direct SQL`);
+            
+            return result.rows.map(i => ({
+              id: i.id,
+              userId: i.user_id,
+              customerId: i.customer_id,
+              invoiceNumber: i.invoice_number,
+              invoiceDate: i.invoice_date,
+              dueDate: i.due_date,
+              notes: i.notes || null,
+              status: i.status,
+              subtotal: i.subtotal,
+              cgst: i.cgst || '0.00',
+              sgst: i.sgst || '0.00',
+              igst: i.igst || '0.00',
+              total: i.total,
+              termsAndConditions: i.terms_and_conditions || null,
+              templateId: i.template_id || 'standard',
+              colorTheme: i.color_theme || 'blue'
+            }));
+          } else {
+            return [];
+          }
+        } catch (sqlError) {
+          console.error("Direct SQL fallback also failed:", sqlError);
+          return [];
+        }
       }
       
       // Transform Supabase snake_case to camelCase
@@ -1169,8 +1215,51 @@ export class SupabaseStorage implements IStorage {
           
           // Refresh Supabase schema cache to make the new records visible
           try {
+            // First try standard refresh
             await refreshSupabaseSchemaCache();
             console.log("Refreshed Supabase schema cache after direct SQL insert");
+            
+            // Force a specific table refresh for invoices and invoice_items
+            try {
+              // Add a small delay to ensure PostgreSQL has time to commit
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              console.log("Performing targeted table refresh for invoices and invoice_items...");
+              
+              // Force refresh for invoices table
+              const { error: invError } = await supabase.rpc('reload_schema_cache');
+              if (invError) {
+                console.warn("Error refreshing Supabase RPC schema cache:", invError);
+              }
+              
+              // Also do a simple query to force cache refresh
+              const { data, error } = await supabase
+                .from('invoices')
+                .select('id')
+                .eq('id', invoiceId)
+                .limit(1);
+                
+              if (error) {
+                console.warn("Error during cache refresh query:", error);
+              } else {
+                console.log("Cache refresh query successful:", data);
+              }
+              
+              // Do the same for invoice_items
+              const { data: itemsData, error: itemsError } = await supabase
+                .from('invoice_items')
+                .select('id')
+                .eq('invoice_id', invoiceId)
+                .limit(1);
+                
+              if (itemsError) {
+                console.warn("Error during invoice_items cache refresh query:", itemsError);
+              } else {
+                console.log("Invoice items cache refresh query successful:", itemsData);
+              }
+            } catch (targetedRefreshError) {
+              console.warn("Error during targeted table refresh:", targetedRefreshError);
+            }
           } catch (cacheError) {
             console.warn("Could not refresh Supabase schema cache, records may not be immediately visible:", cacheError);
           }
