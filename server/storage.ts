@@ -446,8 +446,18 @@ export class SupabaseStorage implements IStorage {
   }
   
   // Helper to directly insert invoice items using SQL to bypass schema cache issues
-  private async insertInvoiceItemsDirect(items: any[]): Promise<boolean> {
+  private async insertInvoiceItemsDirect(items: any[], invoiceId: number): Promise<boolean> {
     try {
+      // First verify the invoice exists to prevent foreign key constraint violation
+      const checkResult = await pool.query('SELECT id FROM invoices WHERE id = $1', [invoiceId]);
+      
+      if (checkResult.rows.length === 0) {
+        console.error(`Invoice with ID ${invoiceId} does not exist in the database`);
+        throw new Error(`Invoice with ID ${invoiceId} not found`);
+      }
+      
+      console.log(`Verified invoice ${invoiceId} exists before inserting items`);
+      
       // Begin a transaction
       await pool.query('BEGIN');
       console.log('Started SQL transaction for direct invoice items insert');
@@ -456,15 +466,15 @@ export class SupabaseStorage implements IStorage {
       for (const item of items) {
         // Convert the item fields to an array of values
         const itemValues = [
-          item.invoice_id,
-          item.product_id,
-          item.description,
+          invoiceId, // Explicitly use the invoiceId parameter instead of item.invoice_id
+          item.product_id === undefined ? null : item.product_id,
+          item.description || '',
           item.unit || 'Piece', // Make sure we explicitly include the unit
-          item.quantity,
-          item.rate,
-          item.amount,
-          item.gst_rate,
-          item.hsn_code
+          item.quantity || 1,
+          item.rate || 0,
+          item.amount || 0,
+          item.gst_rate || 0,
+          item.hsn_code || null
         ];
         
         // Execute the insert statement
@@ -1100,7 +1110,7 @@ export class SupabaseStorage implements IStorage {
             console.warn("Detected schema cache issue. Falling back to direct SQL insertion:", itemsError.message);
             
             // Use our direct SQL helper to bypass Supabase schema cache issues
-            const success = await this.insertInvoiceItemsDirect(supabaseItems);
+            const success = await this.insertInvoiceItemsDirect(supabaseItems, invoiceId);
             
             if (success) {
               console.log(`Successfully inserted ${supabaseItems.length} invoice items via direct SQL`);
@@ -1151,12 +1161,12 @@ export class SupabaseStorage implements IStorage {
         // As a last resort, try direct SQL insertion
         console.warn("Falling back to direct SQL insertion after error:", insertError.message);
         try {
-          const success = await this.insertInvoiceItemsDirect(supabaseItems);
+          const success = await this.insertInvoiceItemsDirect(supabaseItems, invoiceId);
           if (!success) {
             throw new Error("Failed to insert invoice items via direct SQL");
           }
           console.log(`Successfully inserted ${supabaseItems.length} invoice items via direct SQL fallback`);
-        } catch (directSqlError) {
+        } catch (directSqlError: any) {
           console.error("Direct SQL insertion failed:", directSqlError);
           
           // Clean up the invoice
