@@ -8,8 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { calculateGST } from "@/lib/utils/gst-calculations";
 import { formatCurrency } from "@/lib/utils/formatting";
 import { InvoiceItemForm } from "./invoice-item-form";
-import { InvoiceTemplateSelector } from "./invoice-template-selector";
-import { InvoiceTemplateRenderer } from "./invoice-template-renderer";
 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -270,18 +268,9 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
       // Set customer details to the form
       setSelectedCustomer(customer);
       
-      // Update the shipping address fields if they exist in the form
-      try {
-        // Check if these form fields exist before setting them
-        if (form.getValues().hasOwnProperty("shippingAddress")) {
-          form.setValue("shippingAddress", customer.billingAddress || "");
-          form.setValue("shippingCity", customer.billingCity || "");
-          form.setValue("shippingState", customer.billingState || "");
-          form.setValue("shippingPincode", customer.billingPincode || "");
-        }
-      } catch (error) {
-        console.error("Error setting customer shipping details:", error);
-      }
+      // We're not updating shipping address fields in this form
+      // as they're not part of our invoice schema
+      console.log("Customer selected, GST calculations will update accordingly");
     }
     
     // Save form state after customer change
@@ -848,36 +837,15 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
             </Card>
           </div>
 
-          {/* Invoice Template Preview */}
-          <Card className="mt-6">
-            <CardContent className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-medium text-gray-700">Invoice Preview</h3>
-                <div className="text-sm text-muted-foreground">
-                  Using company template: {selectedTemplate.charAt(0).toUpperCase() + selectedTemplate.slice(1)} ({selectedColor.charAt(0).toUpperCase() + selectedColor.slice(1)})
-                </div>
-              </div>
-              
-              <div className="mt-6 border rounded-lg overflow-hidden">
-                {previewInvoiceData ? (
-                  <InvoiceTemplateRenderer 
-                    templateId={selectedTemplate}
-                    colorTheme={selectedColor}
-                    invoice={previewInvoiceData.invoice}
-                    items={previewInvoiceData.items}
-                    company={previewInvoiceData.company}
-                    customer={previewInvoiceData.customer}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-96 bg-gray-50">
-                    <p className="text-gray-500">
-                      Fill in invoice details and add items to preview
-                    </p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Preview hint */}
+          <div className="mt-6 text-center">
+            <p className="text-gray-500 mb-2">
+              Complete the form and click the button below to update the invoice preview
+            </p>
+            <p className="text-gray-500 text-sm">
+              Using company template: {selectedTemplate.charAt(0).toUpperCase() + selectedTemplate.slice(1)} ({selectedColor.charAt(0).toUpperCase() + selectedColor.slice(1)})
+            </p>
+          </div>
           
           <div className="flex justify-end space-x-3 mt-6">
             <Button
