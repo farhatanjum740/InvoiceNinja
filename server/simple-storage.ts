@@ -729,43 +729,462 @@ export class SupabaseStorage implements IStorage {
   }
   
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
-    return [];
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('user_id', userId)
+        .order('invoice_date', { ascending: false });
+      
+      if (error) {
+        console.error("Error fetching invoices:", error);
+        return [];
+      }
+      
+      return data.map(invoice => ({
+        id: invoice.id,
+        userId: invoice.user_id,
+        customerId: invoice.customer_id,
+        invoiceNumber: invoice.invoice_number,
+        invoiceDate: invoice.invoice_date,
+        dueDate: invoice.due_date,
+        status: invoice.status,
+        notes: invoice.notes,
+        termsAndConditions: invoice.terms_and_conditions,
+        totalAmount: invoice.total_amount,
+        subtotal: invoice.subtotal,
+        totalGst: invoice.total_gst,
+        cgst: invoice.cgst,
+        sgst: invoice.sgst,
+        igst: invoice.igst,
+        shippingCost: invoice.shipping_cost
+      }));
+    } catch (error) {
+      console.error("Error in getInvoicesByUserId:", error);
+      return [];
+    }
   }
   
   async getInvoice(id: number): Promise<Invoice | undefined> {
-    return undefined;
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error || !data) {
+        console.error("Error fetching invoice:", error);
+        return undefined;
+      }
+      
+      return {
+        id: data.id,
+        userId: data.user_id,
+        customerId: data.customer_id,
+        invoiceNumber: data.invoice_number,
+        invoiceDate: data.invoice_date,
+        dueDate: data.due_date,
+        status: data.status,
+        notes: data.notes,
+        termsAndConditions: data.terms_and_conditions,
+        totalAmount: data.total_amount,
+        subtotal: data.subtotal,
+        totalGst: data.total_gst,
+        cgst: data.cgst,
+        sgst: data.sgst,
+        igst: data.igst,
+        shippingCost: data.shipping_cost
+      };
+    } catch (error) {
+      console.error("Error in getInvoice:", error);
+      return undefined;
+    }
   }
   
   async getInvoiceWithItems(id: number): Promise<{invoice: Invoice, items: InvoiceItem[]}> {
-    throw new Error("Method not implemented.");
+    try {
+      const invoice = await this.getInvoice(id);
+      if (!invoice) {
+        throw new Error("Invoice not found");
+      }
+      
+      const items = await this.getInvoiceItems(id);
+      
+      return { invoice, items };
+    } catch (error) {
+      console.error("Error in getInvoiceWithItems:", error);
+      throw error;
+    }
   }
   
   async createInvoice(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
-    throw new Error("Method not implemented.");
+    // Use Supabase's built-in PostgreSQL transaction
+    const { data, error } = await supabase.rpc('create_invoice_with_items', {
+      invoice_data: {
+        user_id: invoice.userId,
+        customer_id: invoice.customerId,
+        invoice_number: invoice.invoiceNumber,
+        invoice_date: invoice.invoiceDate,
+        due_date: invoice.dueDate || null,
+        status: invoice.status || 'DRAFT',
+        notes: invoice.notes || null,
+        terms_and_conditions: invoice.termsAndConditions || null,
+        total_amount: invoice.totalAmount || 0,
+        subtotal: invoice.subtotal || 0,
+        total_gst: invoice.totalGst || 0,
+        cgst: invoice.cgst || 0,
+        sgst: invoice.sgst || 0,
+        igst: invoice.igst || 0,
+        shipping_cost: invoice.shippingCost || 0
+      },
+      items_data: items.map(item => ({
+        description: item.description,
+        hsn_code: item.hsnCode || null,
+        quantity: item.quantity,
+        rate: item.rate,
+        gst_rate: item.gstRate,
+        amount: item.amount,
+        unit: item.unit || 'Piece',
+        product_id: item.productId || null
+      }))
+    });
+    
+    if (error) {
+      console.error("Transaction error during invoice creation:", error);
+      
+      // Fallback method if the RPC function isn't working
+      try {
+        console.log("Attempting fallback method for invoice creation...");
+        return await this.createInvoiceFallback(invoice, items);
+      } catch (fallbackError) {
+        console.error("Fallback invoice creation failed too:", fallbackError);
+        throw fallbackError;
+      }
+    }
+    
+    if (!data || !data.invoice_id) {
+      throw new Error("Failed to create invoice - no ID returned");
+    }
+    
+    const newInvoice = await this.getInvoice(data.invoice_id);
+    if (!newInvoice) {
+      throw new Error("Failed to retrieve created invoice");
+    }
+    
+    return newInvoice;
+  }
+  
+  // Fallback method for invoice creation with manual transaction
+  private async createInvoiceFallback(invoice: InsertInvoice, items: InsertInvoiceItem[]): Promise<Invoice> {
+    try {
+      // Start by inserting the invoice
+      const { data: invoiceData, error: invoiceError } = await supabase
+        .from('invoices')
+        .insert({
+          user_id: invoice.userId,
+          customer_id: invoice.customerId,
+          invoice_number: invoice.invoiceNumber,
+          invoice_date: invoice.invoiceDate,
+          due_date: invoice.dueDate || null,
+          status: invoice.status || 'DRAFT',
+          notes: invoice.notes || null,
+          terms_and_conditions: invoice.termsAndConditions || null,
+          total_amount: invoice.totalAmount || 0,
+          subtotal: invoice.subtotal || 0,
+          total_gst: invoice.totalGst || 0,
+          cgst: invoice.cgst || 0,
+          sgst: invoice.sgst || 0,
+          igst: invoice.igst || 0,
+          shipping_cost: invoice.shippingCost || 0
+        })
+        .select()
+        .single();
+      
+      if (invoiceError || !invoiceData) {
+        console.error("Error creating invoice:", invoiceError);
+        throw invoiceError || new Error("Failed to create invoice");
+      }
+      
+      const invoiceId = invoiceData.id;
+      
+      // Insert each invoice item
+      for (const item of items) {
+        const { error: itemError } = await supabase
+          .from('invoice_items')
+          .insert({
+            invoice_id: invoiceId,
+            description: item.description,
+            hsn_code: item.hsnCode || null,
+            quantity: item.quantity,
+            rate: item.rate,
+            gst_rate: item.gstRate,
+            amount: item.amount,
+            unit: item.unit || 'Piece',
+            product_id: item.productId || null
+          });
+        
+        if (itemError) {
+          console.error(`Error creating invoice item for invoice ${invoiceId}:`, itemError);
+          
+          // If we fail to insert an item, try to delete the invoice to avoid partial state
+          try {
+            await supabase.from('invoices').delete().eq('id', invoiceId);
+          } catch (cleanupError) {
+            console.error("Failed to clean up invoice after item insertion failure:", cleanupError);
+          }
+          
+          throw itemError;
+        }
+      }
+      
+      return {
+        id: invoiceData.id,
+        userId: invoiceData.user_id,
+        customerId: invoiceData.customer_id,
+        invoiceNumber: invoiceData.invoice_number,
+        invoiceDate: invoiceData.invoice_date,
+        dueDate: invoiceData.due_date,
+        status: invoiceData.status,
+        notes: invoiceData.notes,
+        termsAndConditions: invoiceData.terms_and_conditions,
+        totalAmount: invoiceData.total_amount,
+        subtotal: invoiceData.subtotal,
+        totalGst: invoiceData.total_gst,
+        cgst: invoiceData.cgst,
+        sgst: invoiceData.sgst,
+        igst: invoiceData.igst,
+        shippingCost: invoiceData.shipping_cost
+      };
+    } catch (error) {
+      console.error("Error in createInvoiceFallback:", error);
+      throw error;
+    }
   }
   
   async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
-    return undefined;
+    try {
+      const updateData: any = {};
+      
+      if (invoice.customerId !== undefined) updateData.customer_id = invoice.customerId;
+      if (invoice.invoiceNumber !== undefined) updateData.invoice_number = invoice.invoiceNumber;
+      if (invoice.invoiceDate !== undefined) updateData.invoice_date = invoice.invoiceDate;
+      if (invoice.dueDate !== undefined) updateData.due_date = invoice.dueDate;
+      if (invoice.status !== undefined) updateData.status = invoice.status;
+      if (invoice.notes !== undefined) updateData.notes = invoice.notes;
+      if (invoice.termsAndConditions !== undefined) updateData.terms_and_conditions = invoice.termsAndConditions;
+      if (invoice.totalAmount !== undefined) updateData.total_amount = invoice.totalAmount;
+      if (invoice.subtotal !== undefined) updateData.subtotal = invoice.subtotal;
+      if (invoice.totalGst !== undefined) updateData.total_gst = invoice.totalGst;
+      if (invoice.cgst !== undefined) updateData.cgst = invoice.cgst;
+      if (invoice.sgst !== undefined) updateData.sgst = invoice.sgst;
+      if (invoice.igst !== undefined) updateData.igst = invoice.igst;
+      if (invoice.shippingCost !== undefined) updateData.shipping_cost = invoice.shippingCost;
+      
+      const { data, error } = await supabase
+        .from('invoices')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error || !data) {
+        console.error("Error updating invoice:", error);
+        return undefined;
+      }
+      
+      return {
+        id: data.id,
+        userId: data.user_id,
+        customerId: data.customer_id,
+        invoiceNumber: data.invoice_number,
+        invoiceDate: data.invoice_date,
+        dueDate: data.due_date,
+        status: data.status,
+        notes: data.notes,
+        termsAndConditions: data.terms_and_conditions,
+        totalAmount: data.total_amount,
+        subtotal: data.subtotal,
+        totalGst: data.total_gst,
+        cgst: data.cgst,
+        sgst: data.sgst,
+        igst: data.igst,
+        shippingCost: data.shipping_cost
+      };
+    } catch (error) {
+      console.error("Error in updateInvoice:", error);
+      return undefined;
+    }
   }
   
   async deleteInvoice(id: number): Promise<boolean> {
-    return false;
+    try {
+      // Delete all invoice items first
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', id);
+      
+      if (itemsError) {
+        console.error("Error deleting invoice items:", itemsError);
+        return false;
+      }
+      
+      // Then delete the invoice
+      const { error } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Error deleting invoice:", error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error in deleteInvoice:", error);
+      return false;
+    }
   }
   
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
-    return [];
+    try {
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId);
+      
+      if (error) {
+        console.error("Error fetching invoice items:", error);
+        return [];
+      }
+      
+      return data.map(item => ({
+        id: item.id,
+        invoiceId: item.invoice_id,
+        description: item.description,
+        hsnCode: item.hsn_code,
+        quantity: item.quantity,
+        rate: item.rate,
+        gstRate: item.gst_rate,
+        amount: item.amount,
+        unit: item.unit || 'Piece',
+        productId: item.product_id
+      }));
+    } catch (error) {
+      console.error("Error in getInvoiceItems:", error);
+      return [];
+    }
   }
   
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
-    throw new Error("Method not implemented.");
+    try {
+      // Check if the invoice exists
+      const invoice = await this.getInvoice(item.invoiceId);
+      if (!invoice) {
+        throw new Error(`Invoice with ID ${item.invoiceId} does not exist`);
+      }
+      
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .insert({
+          invoice_id: item.invoiceId,
+          description: item.description,
+          hsn_code: item.hsnCode || null,
+          quantity: item.quantity,
+          rate: item.rate,
+          gst_rate: item.gstRate,
+          amount: item.amount,
+          unit: item.unit || 'Piece',
+          product_id: item.productId || null
+        })
+        .select()
+        .single();
+      
+      if (error || !data) {
+        console.error("Error adding invoice item:", error);
+        throw error || new Error("Failed to add invoice item");
+      }
+      
+      return {
+        id: data.id,
+        invoiceId: data.invoice_id,
+        description: data.description,
+        hsnCode: data.hsn_code,
+        quantity: data.quantity,
+        rate: data.rate,
+        gstRate: data.gst_rate,
+        amount: data.amount,
+        unit: data.unit || 'Piece',
+        productId: data.product_id
+      };
+    } catch (error) {
+      console.error("Error in addInvoiceItem:", error);
+      throw error;
+    }
   }
   
   async updateInvoiceItem(id: number, item: Partial<InsertInvoiceItem>): Promise<InvoiceItem | undefined> {
-    return undefined;
+    try {
+      const updateData: any = {};
+      
+      if (item.description !== undefined) updateData.description = item.description;
+      if (item.hsnCode !== undefined) updateData.hsn_code = item.hsnCode;
+      if (item.quantity !== undefined) updateData.quantity = item.quantity;
+      if (item.rate !== undefined) updateData.rate = item.rate;
+      if (item.gstRate !== undefined) updateData.gst_rate = item.gstRate;
+      if (item.amount !== undefined) updateData.amount = item.amount;
+      if (item.unit !== undefined) updateData.unit = item.unit;
+      if (item.productId !== undefined) updateData.product_id = item.productId;
+      
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error || !data) {
+        console.error("Error updating invoice item:", error);
+        return undefined;
+      }
+      
+      return {
+        id: data.id,
+        invoiceId: data.invoice_id,
+        description: data.description,
+        hsnCode: data.hsn_code,
+        quantity: data.quantity,
+        rate: data.rate,
+        gstRate: data.gst_rate,
+        amount: data.amount,
+        unit: data.unit || 'Piece',
+        productId: data.product_id
+      };
+    } catch (error) {
+      console.error("Error in updateInvoiceItem:", error);
+      return undefined;
+    }
   }
   
   async deleteInvoiceItem(id: number): Promise<boolean> {
-    return false;
+    try {
+      const { error } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error("Error deleting invoice item:", error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error in deleteInvoiceItem:", error);
+      return false;
+    }
   }
   
   async getInvoiceStats(userId: number): Promise<{
@@ -774,12 +1193,53 @@ export class SupabaseStorage implements IStorage {
     unpaidInvoices: number;
     totalCustomers: number;
   }> {
-    return {
-      totalInvoices: 0,
-      totalRevenue: 0,
-      unpaidInvoices: 0,
-      totalCustomers: 0
-    };
+    try {
+      // Get all invoices for this user
+      const { data: invoices, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('id, total_amount, status')
+        .eq('user_id', userId);
+      
+      if (invoiceError) {
+        console.error("Error fetching invoices for stats:", invoiceError);
+        return {
+          totalInvoices: 0,
+          totalRevenue: 0,
+          unpaidInvoices: 0,
+          totalCustomers: 0
+        };
+      }
+      
+      // Get customer count
+      const { count: customerCount, error: customerError } = await supabase
+        .from('customers')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+      
+      if (customerError) {
+        console.error("Error fetching customer count:", customerError);
+      }
+      
+      // Calculate statistics
+      const totalInvoices = invoices?.length || 0;
+      const totalRevenue = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
+      const unpaidInvoices = invoices?.filter(inv => inv.status === 'PENDING' || inv.status === 'OVERDUE').length || 0;
+      
+      return {
+        totalInvoices,
+        totalRevenue,
+        unpaidInvoices,
+        totalCustomers: customerCount || 0
+      };
+    } catch (error) {
+      console.error("Error in getInvoiceStats:", error);
+      return {
+        totalInvoices: 0,
+        totalRevenue: 0,
+        unpaidInvoices: 0,
+        totalCustomers: 0
+      };
+    }
   }
 }
 
