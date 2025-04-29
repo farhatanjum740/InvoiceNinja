@@ -1026,6 +1026,35 @@ export class SupabaseStorage implements IStorage {
           const invoiceId = invoiceResult.rows[0].id;
           console.log("Created invoice with ID:", invoiceId);
           
+          // First verify all products exist in the database
+          if (items.some(item => item.productId)) {
+            console.log("Invoice contains product references, verifying they exist...");
+            
+            // Get all product IDs from items that are not null
+            const productIds = items
+              .map(item => item.productId)
+              .filter(id => id !== null && id !== undefined);
+              
+            if (productIds.length > 0) {
+              console.log("Checking existence of products:", productIds);
+              
+              // Query database to verify products exist
+              const productsQuery = await pool.query(`
+                SELECT id FROM products WHERE id = ANY($1)
+              `, [productIds]);
+              
+              const existingProductIds = productsQuery.rows.map(row => row.id);
+              console.log("Found existing product IDs:", existingProductIds);
+              
+              // Check for any missing products
+              const missingProductIds = productIds.filter(id => !existingProductIds.includes(id));
+              if (missingProductIds.length > 0) {
+                console.error("Products not found in the database:", missingProductIds);
+                throw new Error(`Products with IDs ${missingProductIds.join(', ')} do not exist in the database`);
+              }
+            }
+          }
+          
           // Process items and prepare for insertion with detailed logging
           const sqlItems = items.map((item, index) => {
             console.log(`Processing invoice item ${index}:`, JSON.stringify(item, null, 2));
@@ -1034,7 +1063,7 @@ export class SupabaseStorage implements IStorage {
             if (!item) {
               console.warn(`Item at index ${index} is undefined or null, creating default item`);
               item = {
-                productId: null,
+                productId: null,  // Always use null for product_id if item is undefined
                 description: `Item ${index + 1}`,
                 unit: 'Piece',
                 quantity: 1,
@@ -1054,7 +1083,7 @@ export class SupabaseStorage implements IStorage {
             // Create item with detailed logging to help debug
             const processedItem = {
               invoice_id: invoiceId,
-              product_id: item.productId || null,
+              product_id: null, // Default to null
               description: item.description || `Item ${index + 1}`,
               unit: item.unit || 'Piece',
               quantity: isNaN(quantity) ? 1 : quantity,
@@ -1063,6 +1092,11 @@ export class SupabaseStorage implements IStorage {
               gst_rate: isNaN(gstRate) ? 0 : gstRate,
               hsn_code: item.hsnCode || null
             };
+            
+            // Only set product_id if the product has been verified to exist
+            if (item.productId) {
+              processedItem.product_id = item.productId;
+            }
             
             console.log(`Processed invoice item ${index}:`, JSON.stringify(processedItem, null, 2));
             return processedItem;
@@ -1302,6 +1336,31 @@ export class SupabaseStorage implements IStorage {
         throw new Error("Cannot add invoice item: Item is undefined");
       }
       
+      // First check if product exists if productId is provided
+      let finalProductId = null;
+      if (item.productId) {
+        console.log(`Verifying product ID ${item.productId} exists before adding invoice item`);
+        
+        try {
+          // Check if product exists in the database
+          const { data, error } = await supabase
+            .from('products')
+            .select('id')
+            .eq('id', item.productId)
+            .single();
+          
+          if (error || !data) {
+            console.warn(`Product with ID ${item.productId} not found in Supabase, will set product_id to null`);
+          } else {
+            console.log(`Verified product ID ${item.productId} exists`);
+            finalProductId = item.productId;
+          }
+        } catch (productCheckError) {
+          console.error("Error checking product existence:", productCheckError);
+          console.warn(`Will use null for product_id due to error checking product existence`);
+        }
+      }
+      
       // Perform type conversions and validations
       const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity ?? 1);
       const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate ?? 0);
@@ -1311,7 +1370,7 @@ export class SupabaseStorage implements IStorage {
       // Convert camelCase to snake_case for Supabase with improved error handling
       const supabaseItem = {
         invoice_id: item.invoiceId,
-        product_id: item.productId || null,
+        product_id: finalProductId, // Use verified product ID or null
         description: item.description || 'Unnamed Item',
         unit: item.unit || 'Piece',
         quantity: isNaN(quantity) ? 1 : quantity,
@@ -1338,6 +1397,19 @@ export class SupabaseStorage implements IStorage {
         const pool = await this.getDirectDbConnection();
         
         try {
+          // Double check product existence with direct SQL
+          if (finalProductId !== null) {
+            const productCheck = await pool.query(`
+              SELECT id FROM products WHERE id = $1
+            `, [finalProductId]);
+            
+            if (!productCheck.rows || productCheck.rows.length === 0) {
+              console.warn(`Product with ID ${finalProductId} not found in direct SQL check, setting product_id to null`);
+              finalProductId = null;
+              supabaseItem.product_id = null;
+            }
+          }
+          
           const result = await pool.query(`
             INSERT INTO invoice_items
               (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
@@ -1346,7 +1418,7 @@ export class SupabaseStorage implements IStorage {
             RETURNING *
           `, [
             supabaseItem.invoice_id,
-            supabaseItem.product_id,
+            supabaseItem.product_id, // Use updated product_id
             supabaseItem.description,
             supabaseItem.unit,
             supabaseItem.quantity,
