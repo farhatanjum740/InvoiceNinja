@@ -1026,15 +1026,33 @@ export class SupabaseStorage implements IStorage {
           const invoiceId = invoiceResult.rows[0].id;
           console.log("Created invoice with ID:", invoiceId);
           
-          // Process items and prepare for insertion
+          // Process items and prepare for insertion with detailed logging
           const sqlItems = items.map((item, index) => {
-            // Ensure numeric values are valid numbers
-            const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity || 1);
-            const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate || 0);
-            const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
-            const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate || 0);
+            console.log(`Processing invoice item ${index}:`, JSON.stringify(item, null, 2));
             
-            return {
+            // Safely handle potentially undefined fields
+            if (!item) {
+              console.warn(`Item at index ${index} is undefined or null, creating default item`);
+              item = {
+                productId: null,
+                description: `Item ${index + 1}`,
+                unit: 'Piece',
+                quantity: 1,
+                rate: 0,
+                amount: 0,
+                gstRate: 0,
+                hsnCode: null
+              };
+            }
+            
+            // Ensure numeric values are valid numbers with better defensive checks
+            const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity ?? 1);
+            const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate ?? 0);
+            const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
+            const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate ?? 0);
+            
+            // Create item with detailed logging to help debug
+            const processedItem = {
               invoice_id: invoiceId,
               product_id: item.productId || null,
               description: item.description || `Item ${index + 1}`,
@@ -1045,6 +1063,9 @@ export class SupabaseStorage implements IStorage {
               gst_rate: isNaN(gstRate) ? 0 : gstRate,
               hsn_code: item.hsnCode || null
             };
+            
+            console.log(`Processed invoice item ${index}:`, JSON.stringify(processedItem, null, 2));
+            return processedItem;
           });
           
           // Insert each item in the same transaction
@@ -1274,19 +1295,35 @@ export class SupabaseStorage implements IStorage {
   
   async addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
     try {
-      // Convert camelCase to snake_case for Supabase
+      console.log("Adding invoice item:", JSON.stringify(item, null, 2));
+      
+      // Ensure all required fields exist and have fallbacks
+      if (!item) {
+        throw new Error("Cannot add invoice item: Item is undefined");
+      }
+      
+      // Perform type conversions and validations
+      const quantity = typeof item.quantity === 'string' ? parseFloat(item.quantity) : (item.quantity ?? 1);
+      const rate = typeof item.rate === 'string' ? parseFloat(item.rate) : (item.rate ?? 0);
+      const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : (quantity * rate);
+      const gstRate = typeof item.gstRate === 'string' ? parseFloat(item.gstRate) : (item.gstRate ?? 0);
+      
+      // Convert camelCase to snake_case for Supabase with improved error handling
       const supabaseItem = {
         invoice_id: item.invoiceId,
-        product_id: item.productId,
-        description: item.description,
+        product_id: item.productId || null,
+        description: item.description || 'Unnamed Item',
         unit: item.unit || 'Piece',
-        quantity: item.quantity,
-        rate: item.rate,
-        amount: item.amount,
-        gst_rate: item.gstRate,
-        hsn_code: item.hsnCode
+        quantity: isNaN(quantity) ? 1 : quantity,
+        rate: isNaN(rate) ? 0 : rate,
+        amount: isNaN(amount) ? (isNaN(quantity) ? 1 : quantity) * (isNaN(rate) ? 0 : rate) : amount,
+        gst_rate: isNaN(gstRate) ? 0 : gstRate,
+        hsn_code: item.hsnCode || null
       };
       
+      console.log("Prepared invoice item for Supabase:", JSON.stringify(supabaseItem, null, 2));
+      
+      // Attempt insert with Supabase
       const { data, error } = await supabase
         .from('invoice_items')
         .insert(supabaseItem)
@@ -1295,12 +1332,63 @@ export class SupabaseStorage implements IStorage {
         
       if (error) {
         console.error("Supabase invoice item creation error:", error);
-        throw new Error(`Failed to create invoice item: ${error.message}`);
+        
+        // Try with direct SQL if Supabase fails (common with schema cache issues)
+        console.log("Trying direct SQL insert for invoice item as fallback");
+        const pool = await this.getDirectDbConnection();
+        
+        try {
+          const result = await pool.query(`
+            INSERT INTO invoice_items
+              (invoice_id, product_id, description, unit, quantity, rate, amount, gst_rate, hsn_code)
+            VALUES
+              ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *
+          `, [
+            supabaseItem.invoice_id,
+            supabaseItem.product_id,
+            supabaseItem.description,
+            supabaseItem.unit,
+            supabaseItem.quantity,
+            supabaseItem.rate,
+            supabaseItem.amount,
+            supabaseItem.gst_rate,
+            supabaseItem.hsn_code
+          ]);
+          
+          if (result.rows && result.rows.length > 0) {
+            const row = result.rows[0];
+            console.log("Successfully inserted invoice item via direct SQL:", row.id);
+            
+            // Transform SQL result to camelCase
+            return {
+              id: row.id,
+              invoiceId: row.invoice_id,
+              productId: row.product_id,
+              description: row.description,
+              unit: row.unit || 'Piece',
+              quantity: row.quantity,
+              rate: row.rate,
+              amount: row.amount,
+              gstRate: row.gst_rate,
+              hsnCode: row.hsn_code
+            };
+          } else {
+            throw new Error("Direct SQL insert returned no rows");
+          }
+        } catch (sqlError) {
+          console.error("Direct SQL insert failed:", sqlError);
+          throw new Error(`Failed to create invoice item: ${error.message}`);
+        } finally {
+          await pool.end();
+        }
       }
       
       if (!data) {
         throw new Error("Failed to create invoice item: No data returned");
       }
+      
+      console.log("Successfully created invoice item with Supabase:", data.id);
       
       // Transform Supabase snake_case to camelCase
       return {
@@ -1313,7 +1401,7 @@ export class SupabaseStorage implements IStorage {
         rate: data.rate,
         amount: data.amount,
         gstRate: data.gst_rate,
-        hsnCode: data.hsn_code || null
+        hsnCode: data.hsn_code
       };
     } catch (error) {
       console.error("Error adding invoice item:", error);
