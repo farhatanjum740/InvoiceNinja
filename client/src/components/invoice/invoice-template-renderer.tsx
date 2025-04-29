@@ -79,7 +79,13 @@ export function InvoiceTemplateRenderer({
               </div>
               <div className="text-right">
                 <h2 className="font-bold text-xl">{company.name}</h2>
-                <p className="text-white/80 text-sm mt-1">{company.gstin && `GSTIN: ${company.gstin}`}</p>
+                <p className="text-white/80 text-sm">{company.address || ''}</p>
+                <p className="text-white/80 text-sm">
+                  {company.city || ''}
+                  {company.state ? `, ${company.state}` : ''}
+                  {company.pincode ? ` - ${company.pincode}` : ''}
+                </p>
+                <p className="text-white/80 text-sm mt-1">{company.gstin ? `GSTIN: ${company.gstin}` : ''}</p>
               </div>
             </div>
           </div>
@@ -142,10 +148,10 @@ export function InvoiceTemplateRenderer({
                   <tr key={index} className="text-sm">
                     <td className="py-3">{item.description}</td>
                     <td className="py-3">{item.hsnCode || '-'}</td>
-                    <td className="py-3 text-right">{item.quantity} {item.unit}</td>
+                    <td className="py-3 text-right">{item.quantity || 0} {item.unit || 'Piece'}</td>
                     <td className="py-3 text-right">{typeof item.rate === 'number' ? 
                       formatCurrency(item.rate) : item.rate}</td>
-                    <td className="py-3 text-right">{item.gstRate}%</td>
+                    <td className="py-3 text-right">{item.gstRate || 0}%</td>
                     <td className="py-3 text-right font-medium">{typeof item.amount === 'number' ? 
                       formatCurrency(item.amount) : item.amount}</td>
                   </tr>
@@ -459,7 +465,7 @@ export function InvoiceTemplateRenderer({
                     <td className="p-3 border-b text-right">{item.quantity || 0} {item.unit || 'Piece'}</td>
                     <td className="p-3 border-b text-right">{typeof item.rate === 'number' ? 
                       formatCurrency(item.rate) : item.rate}</td>
-                    <td className="p-3 border-b text-right">{item.gstRate}%</td>
+                    <td className="p-3 border-b text-right">{item.gstRate || 0}%</td>
                     <td className="p-3 border-b text-right font-medium">{typeof item.amount === 'number' ? 
                       formatCurrency(item.amount) : item.amount}</td>
                   </tr>
