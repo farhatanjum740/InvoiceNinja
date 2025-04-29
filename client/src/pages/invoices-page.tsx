@@ -373,7 +373,7 @@ export default function InvoicesPage() {
                   <tr>
                     <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.description}</td>
                     <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.hsnCode}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;">${parseFloat(String(item.quantity)).toLocaleString('en-IN')}</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">${parseFloat(String(item.quantity)).toLocaleString('en-IN')} ${item.unit || 'Piece'}</td>
                     <td style="padding: 10px; border-bottom: 1px solid #eee;">₹${parseFloat(String(item.rate)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.gstRate}%</td>
                     <td style="padding: 10px; border-bottom: 1px solid #eee;">₹${parseFloat(String(item.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
