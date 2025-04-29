@@ -145,7 +145,9 @@ export async function syncDirectDatabaseChange(table: string) {
   try {
     console.log(`Syncing direct database change for table: ${table}`);
     
-    // Try the direct notification to PostgREST
+    // Try multiple approaches to refresh Supabase's cache
+    
+    // 1. Direct notification to PostgREST
     try {
       await pool.query("SELECT pg_notify('pgrst', 'reload schema');");
       console.log(`Sent schema reload notification to PostgREST for table: ${table}`);
@@ -153,16 +155,38 @@ export async function syncDirectDatabaseChange(table: string) {
       console.warn('Failed to send PostgREST notification:', error);
     }
     
-    // Force a refresh by querying the table
+    // 2. Force a refresh by querying the table through Supabase
     try {
-      const { error } = await supabase.from(table).select('id').limit(1);
+      const { error } = await supabase.from(table).select('*').limit(5);
       if (error) {
         console.warn(`Error refreshing Supabase cache for ${table}:`, error);
       } else {
-        console.log(`Successfully refreshed Supabase cache for ${table}`);
+        console.log(`Successfully queried ${table} through Supabase client`);
       }
     } catch (error) {
       console.error(`Failed to refresh Supabase cache for ${table}:`, error);
+    }
+    
+    // 3. Run NOTIFY commands directly on the database
+    try {
+      await pool.query(`NOTIFY ${table}_change;`);
+      console.log(`Sent direct notification for ${table}_change`);
+    } catch (notifyError) {
+      console.warn(`Failed to send direct notification for ${table}:`, notifyError);
+    }
+    
+    // 4. Invalidate PostgREST cache directly with REST call
+    try {
+      // This is a more aggressive approach to force PostgREST to reload its schema
+      await pool.query(`
+        BEGIN;
+        COMMENT ON TABLE ${table} IS 'Cache busting comment ${Date.now()}';
+        NOTIFY pgrst, 'reload schema';
+        COMMIT;
+      `);
+      console.log(`Updated table comment and sent NOTIFY for ${table}`);
+    } catch (cacheError) {
+      console.warn(`Failed to invalidate cache for ${table}:`, cacheError);
     }
     
     return true;

@@ -247,6 +247,69 @@ export class SupabaseStorage implements IStorage {
   
   async createCompany(company: InsertCompany): Promise<Company> {
     try {
+      console.log("Creating company with data:", company);
+      
+      // First try direct SQL for more reliability
+      try {
+        // Generate a safe ID by adding a buffer to the current max ID
+        const maxIdResult = await pool.query('SELECT COALESCE(MAX(id), 0) + 5 as next_id FROM companies');
+        const nextId = maxIdResult.rows[0].next_id;
+        console.log("Using generated ID for company insert:", nextId);
+        
+        const result = await pool.query(
+          `INSERT INTO companies (
+            id, name, user_id, email, gstin, address, city, state, pincode, phone, bank_name, account_number, ifsc_code, logo
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+          ) RETURNING *`,
+          [
+            nextId,
+            company.name,
+            company.userId,
+            company.email || null,
+            company.gstin || null,
+            company.address,
+            company.city,
+            company.state,
+            company.pincode,
+            company.phone || null,
+            company.bankName || null,
+            company.accountNumber || null,
+            company.ifscCode || null,
+            company.logo || null
+          ]
+        );
+        
+        if (result.rows.length > 0) {
+          const newCompany = result.rows[0];
+          console.log("Successfully created company with direct SQL using ID:", nextId);
+          
+          // Sync the direct database change with Supabase
+          await syncDirectDatabaseChange('companies');
+          
+          return {
+            id: newCompany.id,
+            name: newCompany.name,
+            userId: newCompany.user_id,
+            email: newCompany.email,
+            gstin: newCompany.gstin,
+            address: newCompany.address,
+            city: newCompany.city,
+            state: newCompany.state,
+            pincode: newCompany.pincode,
+            phone: newCompany.phone,
+            bankName: newCompany.bank_name,
+            accountNumber: newCompany.account_number,
+            ifscCode: newCompany.ifsc_code,
+            logo: newCompany.logo
+          };
+        }
+      } catch (directSqlError: any) {
+        console.warn("Direct SQL insert failed, attempting Supabase Data API:", directSqlError.message || directSqlError);
+      }
+      
+      // Fallback to Supabase API if direct SQL fails
+      console.log("Attempting insert with Supabase Data API");
       const { data, error } = await supabase
         .from('companies')
         .insert({
