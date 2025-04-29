@@ -165,9 +165,32 @@ export class SupabaseStorage implements IStorage {
   
   async createUser(user: InsertUser): Promise<User> {
     try {
+      // First, check if user already exists to prevent duplicates
+      const existingUser = await this.getUserByUsername(user.username);
+      if (existingUser) {
+        throw new Error(`Username ${user.username} already exists`);
+      }
+      
+      const existingEmail = await this.getUserByEmail(user.email);
+      if (existingEmail) {
+        throw new Error(`Email ${user.email} already exists`);
+      }
+      
+      // Get the max id from the users table to avoid primary key conflicts
+      const { data: maxIdData } = await supabase
+        .from('users')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1)
+        .single();
+        
+      const nextId = maxIdData ? maxIdData.id + 1 : 1;
+      
+      // Insert with explicit ID to avoid conflicts
       const { data, error } = await supabase
         .from('users')
         .insert({
+          id: nextId,  // Use the calculated next ID
           username: user.username,
           email: user.email,
           password: user.password,
