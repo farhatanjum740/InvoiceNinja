@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Download, Loader2, AlertTriangle } from "lucide-react";
 import { InvoiceTemplateRenderer } from "./invoice-template-renderer";
 
 // PDF paper size definitions in mm (width, height)
@@ -19,12 +20,15 @@ interface InvoicePdfProps {
 export function InvoicePdf({ invoice }: InvoicePdfProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [paperSize, setPaperSize] = useState<keyof typeof PAPER_SIZES>('A4');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const invoiceRef = useRef<HTMLDivElement>(null);
   
   const generatePDF = async () => {
     if (!invoiceRef.current) return;
     
     setIsGenerating(true);
+    
+    setErrorMessage(null);
     
     try {
       const invoiceElement = invoiceRef.current;
@@ -159,6 +163,19 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       pdf.save(filename);
     } catch (error) {
       console.error("Error generating PDF:", error);
+      
+      // Set a user-friendly error message
+      if (error instanceof Error) {
+        if (error.message.includes('tainted canvas')) {
+          setErrorMessage("Could not generate PDF: The invoice contains images from another domain. Try downloading invoice images first.");
+        } else if (error.message.includes('timeout')) {
+          setErrorMessage("PDF generation timed out. The invoice may be too complex. Try a smaller paper size.");
+        } else {
+          setErrorMessage(`Error generating PDF: ${error.message}`);
+        }
+      } else {
+        setErrorMessage("An unexpected error occurred while generating the PDF.");
+      }
     } finally {
       setIsGenerating(false);
     }
