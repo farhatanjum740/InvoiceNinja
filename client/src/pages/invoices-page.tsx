@@ -331,7 +331,11 @@ export default function InvoicesPage() {
               <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">From</div>
               <div>${completeData.company.name}</div>
               <div>${completeData.company.address || ''}</div>
-              <div>${completeData.company.city || ''}, ${completeData.company.state || ''} ${completeData.company.pincode || ''}</div>
+              <div>
+                ${completeData.company.city || ''}
+                ${completeData.company.state ? `, ${completeData.company.state}` : ''}
+                ${completeData.company.pincode ? ` - ${completeData.company.pincode}` : ''}
+              </div>
               <div>GSTIN: ${completeData.company.gstin || 'N/A'}</div>
               <div>Phone: ${completeData.company.phone || 'N/A'}</div>
               <div>Email: ${completeData.company.email || 'N/A'}</div>
@@ -341,7 +345,11 @@ export default function InvoicesPage() {
               <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Bill To</div>
               <div>${completeData.customer.name}</div>
               <div>${completeData.customer.billingAddress || ''}</div>
-              <div>${completeData.customer.billingCity || ''}, ${completeData.customer.billingState || ''} ${completeData.customer.billingPincode || ''}</div>
+              <div>
+                ${completeData.customer.billingCity || ''}
+                ${completeData.customer.billingState ? `, ${completeData.customer.billingState}` : ''}
+                ${completeData.customer.billingPincode ? ` - ${completeData.customer.billingPincode}` : ''}
+              </div>
               <div>GSTIN: ${completeData.customer.gstin || 'N/A'}</div>
               <div>Phone: ${completeData.customer.phone || 'N/A'}</div>
               <div>Email: ${completeData.customer.email || 'N/A'}</div>

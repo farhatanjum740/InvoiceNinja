@@ -90,8 +90,11 @@ export function InvoiceTemplateRenderer({
               <h3 className="text-gray-500 text-sm mb-2">BILL TO</h3>
               <p className="font-semibold">{customer.name}</p>
               <p className="text-gray-700 text-sm mt-1">{customer.billingAddress || ''}</p>
-              <p className="text-gray-700 text-sm">{customer.billingCity || ''}{customer.billingState ? `, ${customer.billingState}` : ''}</p>
-              <p className="text-gray-700 text-sm">{customer.billingPincode || ''}</p>
+              <p className="text-gray-700 text-sm">
+                {customer.billingCity || ''}
+                {customer.billingState ? `, ${customer.billingState}` : ''}
+                {customer.billingPincode ? ` - ${customer.billingPincode}` : ''}
+              </p>
               {customer.gstin && <p className="text-gray-700 text-sm mt-2">GSTIN: {customer.gstin}</p>}
             </div>
             
