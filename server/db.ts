@@ -6,6 +6,11 @@ import ws from 'ws';
 import { neonConfig } from '@neondatabase/serverless';
 neonConfig.webSocketConstructor = ws;
 
+// Create database pool for direct access
+export const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL 
+});
+
 // Create Supabase client for all operations
 export const supabase = createClient(
   process.env.SUPABASE_URL || '',
