@@ -376,20 +376,32 @@ export class SupabaseStorage implements IStorage {
         return [];
       }
       
-      // Transform Supabase snake_case to camelCase
-      return data.map(c => ({
-        id: c.id,
-        userId: c.user_id,
-        name: c.name,
-        email: c.email,
-        phone: c.phone,
-        address: c.address,
-        city: c.city,
-        state: c.state,
-        postalCode: c.postal_code,
-        country: c.country,
-        gstin: c.gstin
-      }));
+      // Transform Supabase snake_case to camelCase with backward compatibility
+      return data.map(c => {
+        // Map the DB fields to our schema
+        const customer: any = {
+          id: c.id,
+          userId: c.user_id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          gstin: c.gstin,
+          // Default billing fields to empty strings if not present
+          billingAddress: c.billing_address || c.address || "",
+          billingCity: c.billing_city || c.city || "",
+          billingState: c.billing_state || c.state || "",
+          billingPincode: c.billing_pincode || c.pincode || c.postal_code || "",
+          // Default shipping fields
+          shippingAddress: c.shipping_address || c.address || "",
+          shippingCity: c.shipping_city || c.city || "",
+          shippingState: c.shipping_state || c.state || "",
+          shippingPincode: c.shipping_pincode || c.pincode || c.postal_code || "",
+          sameAsShipping: c.same_as_shipping !== undefined ? c.same_as_shipping : true
+        };
+        
+        console.log("Transformed customer:", customer);
+        return customer;
+      });
     } catch (error) {
       console.error("Error fetching customers:", error);
       return [];
@@ -411,20 +423,29 @@ export class SupabaseStorage implements IStorage {
       
       if (!data) return undefined;
       
-      // Transform Supabase snake_case to camelCase
-      return {
+      // Transform with same logic as getCustomersByUserId
+      const customer: any = {
         id: data.id,
         userId: data.user_id,
         name: data.name,
         email: data.email,
         phone: data.phone,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        postalCode: data.postal_code,
-        country: data.country,
-        gstin: data.gstin
+        gstin: data.gstin,
+        // Default billing fields to empty strings if not present
+        billingAddress: data.billing_address || data.address || "",
+        billingCity: data.billing_city || data.city || "",
+        billingState: data.billing_state || data.state || "",
+        billingPincode: data.billing_pincode || data.pincode || data.postal_code || "",
+        // Default shipping fields
+        shippingAddress: data.shipping_address || data.address || "",
+        shippingCity: data.shipping_city || data.city || "",
+        shippingState: data.shipping_state || data.state || "",
+        shippingPincode: data.shipping_pincode || data.pincode || data.postal_code || "",
+        sameAsShipping: data.same_as_shipping !== undefined ? data.same_as_shipping : true
       };
+      
+      console.log("Fetched individual customer:", customer);
+      return customer;
     } catch (error) {
       console.error("Error fetching customer:", error);
       return undefined;
@@ -598,17 +619,20 @@ export class SupabaseStorage implements IStorage {
       
       if (!data) return undefined;
       
-      // Transform Supabase snake_case to camelCase
+      // Transform Supabase snake_case to camelCase with consistent field handling
       return {
         id: data.id,
         userId: data.user_id,
-        name: data.name,
-        description: data.description,
-        hsnCode: data.hsn_code,
-        unit: data.unit,
-        price: data.price,
-        gstRate: data.gst_rate,
-        imageUrl: data.image_url
+        name: data.name || "",
+        description: data.description || "",
+        hsnCode: data.hsn_code || "",
+        unit: data.unit || "Piece",
+        // Use rate instead of price to match schema.ts definition
+        rate: data.price || data.rate || "0", // Try both field names with fallback
+        gstRate: data.gst_rate || 0,
+        // Include these for backward compatibility
+        price: data.price || data.rate || "0", // Backward compatibility
+        imageUrl: data.image_url || null
       };
     } catch (error) {
       console.error("Error fetching product:", error);
@@ -645,17 +669,20 @@ export class SupabaseStorage implements IStorage {
         throw new Error("Failed to create product: No data returned");
       }
       
-      // Transform Supabase snake_case to camelCase
+      // Transform with same consistent field handling as getProduct
       return {
         id: data.id,
         userId: data.user_id,
-        name: data.name,
-        description: data.description,
-        hsnCode: data.hsn_code,
-        unit: data.unit,
-        price: data.price,
-        gstRate: data.gst_rate,
-        imageUrl: data.image_url
+        name: data.name || "",
+        description: data.description || "",
+        hsnCode: data.hsn_code || "",
+        unit: data.unit || "Piece",
+        // Use rate instead of price to match schema.ts definition
+        rate: data.price || data.rate || "0", // Try both field names with fallback
+        gstRate: data.gst_rate || 0,
+        // Include these for backward compatibility
+        price: data.price || data.rate || "0", // Backward compatibility
+        imageUrl: data.image_url || null
       };
     } catch (error) {
       console.error("Error creating product:", error);
@@ -690,17 +717,20 @@ export class SupabaseStorage implements IStorage {
         return undefined;
       }
       
-      // Transform back to camelCase
+      // Transform with same consistent field handling as getProduct
       return {
         id: data.id,
         userId: data.user_id,
-        name: data.name,
-        description: data.description,
-        hsnCode: data.hsn_code,
-        unit: data.unit,
-        price: data.price,
-        gstRate: data.gst_rate,
-        imageUrl: data.image_url
+        name: data.name || "",
+        description: data.description || "",
+        hsnCode: data.hsn_code || "",
+        unit: data.unit || "Piece",
+        // Use rate instead of price to match schema.ts definition
+        rate: data.price || data.rate || "0", // Try both field names with fallback
+        gstRate: data.gst_rate || 0,
+        // Include these for backward compatibility
+        price: data.price || data.rate || "0", // Backward compatibility
+        imageUrl: data.image_url || null
       };
     } catch (error) {
       console.error("Error updating product:", error);
