@@ -55,10 +55,9 @@ export function createRouterFixMiddleware(app: express.Express) {
         const distPath = path.resolve(process.cwd(), 'dist', 'public');
         return res.sendFile(path.resolve(distPath, 'index.html'));
       } else {
-        // In development, serve the client's index.html file
-        const clientIndexPath = path.resolve(process.cwd(), 'client', 'index.html');
-        console.log(`Serving client index from: ${clientIndexPath}`);
-        return res.sendFile(clientIndexPath);
+        // In development, let Vite's middleware handle this
+        console.log('Letting Vite handle the client-side route in development mode');
+        return next();
       }
     }
     

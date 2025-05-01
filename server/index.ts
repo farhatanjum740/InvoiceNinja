@@ -58,12 +58,12 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // Apply our router fix middleware first in development to register debug routes
+  // Setup based on environment
   if (app.get("env") === "development") {
-    // In development, apply router fix first, then setupVite
-    createRouterFixMiddleware(app);
+    // In development, setup Vite first, then apply our router fix
     await setupVite(app, server);
-    console.log('Development server mode: Router fix applied + Vite setup');
+    createRouterFixMiddleware(app);
+    console.log('Development server mode: Vite setup + Router fix applied');
   } else {
     // In production, apply static file serving first, then router fix
     serveStatic(app);
