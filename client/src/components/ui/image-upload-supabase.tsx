@@ -1,7 +1,9 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, X, Loader2 } from "lucide-react";
-import { uploadFile, deleteFile, STORAGE_BUCKETS, getPathFromUrl } from "@/lib/storage-utils";
+import { STORAGE_BUCKETS } from "@/lib/supabase";
+import { getPathFromUrl } from "@/lib/storage-utils";
+import { uploadFile as apiUploadFile, deleteFile as apiDeleteFile } from "@/lib/storage-api";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImageUploadProps {
@@ -110,12 +112,14 @@ export function ImageUploadSupabase({
       if (previewUrl) {
         const filePath = getPathFromUrl(previewUrl, STORAGE_BUCKETS.COMPANY_LOGOS);
         if (filePath) {
-          await deleteFile(STORAGE_BUCKETS.COMPANY_LOGOS, filePath);
+          // Use API-based delete instead of direct Supabase call
+          await apiDeleteFile(STORAGE_BUCKETS.COMPANY_LOGOS, filePath);
         }
       }
       
-      // Upload to Supabase
-      const fileUrl = await uploadFile(STORAGE_BUCKETS.COMPANY_LOGOS, compressedFile, path);
+      // Upload to Supabase via our server API
+      const result = await apiUploadFile(STORAGE_BUCKETS.COMPANY_LOGOS, compressedFile, path);
+      const fileUrl = result?.url;
       
       if (fileUrl) {
         setPreviewUrl(fileUrl);
@@ -149,10 +153,10 @@ export function ImageUploadSupabase({
     setIsLoading(true);
     
     try {
-      // Delete from Supabase Storage
+      // Delete from Supabase Storage using our server API
       const filePath = getPathFromUrl(previewUrl, STORAGE_BUCKETS.COMPANY_LOGOS);
       if (filePath) {
-        await deleteFile(STORAGE_BUCKETS.COMPANY_LOGOS, filePath);
+        await apiDeleteFile(STORAGE_BUCKETS.COMPANY_LOGOS, filePath);
       }
       
       setPreviewUrl(null);

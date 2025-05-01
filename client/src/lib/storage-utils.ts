@@ -1,6 +1,6 @@
 import imageCompression from 'browser-image-compression';
-import { uploadFile, deleteFile, STORAGE_BUCKETS } from './supabase';
-import { getPublicUrl } from './storage-api';
+import { STORAGE_BUCKETS } from './supabase';
+import { uploadFile, deleteFile, getPublicUrl } from './storage-api';
 
 // Maximum file size for images in MB
 const MAX_FILE_SIZE_MB = 1;
@@ -40,7 +40,7 @@ export async function compressImage(file: File): Promise<File> {
 }
 
 /**
- * Upload a company logo to Supabase storage
+ * Upload a company logo to Supabase storage via server API
  * @param file The logo file to upload
  * @param userId The ID of the user/company
  * @returns A Promise that resolves to the logo URL or null on error
@@ -50,7 +50,7 @@ export async function uploadCompanyLogo(file: File, userId: number): Promise<str
     // Compress the image first
     const compressedFile = await compressImage(file);
     
-    // Upload to Supabase
+    // Upload to Supabase via server API
     const result = await uploadFile(
       STORAGE_BUCKETS.COMPANY_LOGOS,
       compressedFile,
@@ -65,7 +65,7 @@ export async function uploadCompanyLogo(file: File, userId: number): Promise<str
 }
 
 /**
- * Upload an invoice attachment to Supabase storage
+ * Upload an invoice attachment to Supabase storage via server API
  * @param file The attachment file to upload
  * @param invoiceId The ID of the invoice
  * @returns A Promise that resolves to the attachment URL or null on error
@@ -77,7 +77,7 @@ export async function uploadInvoiceAttachment(file: File, invoiceId: number): Pr
       ? await compressImage(file)
       : file;
     
-    // Upload to Supabase
+    // Upload to Supabase via server API
     const result = await uploadFile(
       STORAGE_BUCKETS.INVOICE_ATTACHMENTS,
       preparedFile,
