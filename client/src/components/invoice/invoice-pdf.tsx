@@ -6,12 +6,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Download, Loader2, AlertTriangle } from "lucide-react";
 import { InvoiceTemplateRenderer } from "./invoice-template-renderer";
 
-// PDF paper size definitions in mm (width, height)
-const PAPER_SIZES = {
-  A4: { width: 210, height: 297 },
-  LETTER: { width: 215.9, height: 279.4 },
-  LEGAL: { width: 215.9, height: 355.6 },
-};
+// PDF paper size - standardized to A4 only
+const PAPER_SIZE = { width: 210, height: 297 };
 
 interface InvoicePdfProps {
   invoice: any;
@@ -19,7 +15,6 @@ interface InvoicePdfProps {
 
 export function InvoicePdf({ invoice }: InvoicePdfProps) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [paperSize, setPaperSize] = useState<keyof typeof PAPER_SIZES>('A4');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressStep, setProgressStep] = useState<string>('');
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -58,21 +53,20 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       // Use JPEG format with moderate quality for smaller file size
       const imgData = canvas.toDataURL("image/jpeg", 0.8);
       
-      // Get selected paper dimensions
+      // Standard A4 paper size
       setProgressStep('Creating PDF document...');
-      const selectedPaperSize = PAPER_SIZES[paperSize];
-      console.log(`Using ${paperSize} paper size: ${selectedPaperSize.width}mm x ${selectedPaperSize.height}mm`);
+      console.log(`Using A4 paper size: ${PAPER_SIZE.width}mm x ${PAPER_SIZE.height}mm`);
       
-      // Create PDF with selected paper size
+      // Create PDF with standard A4 size
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
-        format: paperSize.toLowerCase(),
+        format: "a4",
         compress: true, // Enable compression
       });
       
       // Set image dimensions based on paper width
-      const imgWidth = selectedPaperSize.width;
+      const imgWidth = PAPER_SIZE.width;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
       // Add compression options to reduce file size
@@ -86,10 +80,10 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       
       // Improved pagination approach for invoices
       // Check if content exceeds single page
-      const pageHeight = selectedPaperSize.height;
+      const pageHeight = PAPER_SIZE.height;
       const footerHeight = 15; // Height of the footer area in mm
       const headerHeight = 15; // Height of the header area in mm
-      const pageWidth = selectedPaperSize.width;
+      const pageWidth = PAPER_SIZE.width;
         
       if (imgHeight > pageHeight) {
         // First page is already added above
@@ -176,7 +170,7 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
         if (error.message.includes('tainted canvas')) {
           setErrorMessage("Could not generate PDF: The invoice contains images from another domain. Try downloading invoice images first.");
         } else if (error.message.includes('timeout')) {
-          setErrorMessage("PDF generation timed out. The invoice may be too complex. Try a smaller paper size.");
+          setErrorMessage("PDF generation timed out. The invoice may be too complex.");
         } else {
           setErrorMessage(`Error generating PDF: ${error.message}`);
         }
@@ -200,34 +194,8 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
         </Alert>
       )}
       
-      {/* PDF Export Options */}
-      <div className="flex justify-between items-center">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Paper Size:</span>
-            <div className="flex rounded-md border overflow-hidden">
-              {(Object.keys(PAPER_SIZES) as Array<keyof typeof PAPER_SIZES>).map((size) => (
-                <button 
-                  key={size}
-                  className={`px-3 py-1 text-xs font-medium ${
-                    paperSize === size 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'bg-background hover:bg-muted'
-                  }`}
-                  onClick={() => setPaperSize(size)}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {paperSize === 'A4' ? 'ISO Standard (210×297 mm)' : 
-             paperSize === 'LETTER' ? 'US Letter (8.5×11 in)' :
-             'US Legal (8.5×14 in)'}
-          </div>
-        </div>
-        
+      {/* PDF Export Button */}
+      <div className="flex justify-end items-center">
         <Button 
           onClick={generatePDF} 
           disabled={isGenerating}

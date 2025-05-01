@@ -3,9 +3,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PersistentTabs } from "@/components/ui/persistent-tabs";
 import { InvoiceForm } from "@/components/invoice/invoice-form";
-import { InvoicePdf } from "@/components/invoice/invoice-pdf";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -14,9 +12,7 @@ import { AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function CreateInvoicePage() {
-  const [activeTab, setActiveTab] = useState("edit");
   const [invoiceData, setInvoiceData] = useState<any>(null);
-  const [isPreviewReady, setIsPreviewReady] = useState(false);
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -35,10 +31,9 @@ export default function CreateInvoicePage() {
     queryKey: ["/api/products"],
   });
 
-  // Function to handle invoice data update for preview
+  // Function to handle invoice data update
   const handleInvoiceDataChange = (data: any) => {
     setInvoiceData(data);
-    setIsPreviewReady(true);
     // Store the form data in localStorage as a backup
     if (data) {
       localStorage.setItem('invoice-draft', JSON.stringify(data));
@@ -52,7 +47,6 @@ export default function CreateInvoicePage() {
       try {
         const parsedData = JSON.parse(savedDraft);
         setInvoiceData(parsedData);
-        setIsPreviewReady(true);
       } catch (e) {
         console.error("Error parsing saved invoice draft:", e);
       }
@@ -111,55 +105,21 @@ export default function CreateInvoicePage() {
                 </AlertDescription>
               </Alert>
             ) : (
-              <PersistentTabs 
-                defaultValue="edit"
-                values={["edit", "preview"]}
-                triggerLabels={["Edit Invoice", isPreviewReady ? "Preview" : "Preview (disabled)"]}
-                onValueChange={setActiveTab}
-                className="w-full"
-                triggerClassName="mb-6"
-              >
-                {/* Edit Tab - Always mounted */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Invoice Details</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <InvoiceForm
-                      company={company}
-                      customers={customers}
-                      products={products}
-                      isLoading={isLoadingCompany || isLoadingCustomers || isLoadingProducts}
-                      onDataChange={handleInvoiceDataChange}
-                      onSuccess={handleInvoiceSuccess}
-                    />
-                  </CardContent>
-                </Card>
-
-                {/* Preview Tab - Always mounted */}
-                <Card>
-                  <div className="absolute top-4 right-4 z-10">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setActiveTab("edit")}
-                    >
-                      Back to Edit
-                    </Button>
-                  </div>
-                  <CardHeader>
-                    <CardTitle>Invoice Preview</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {invoiceData ? (
-                      <InvoicePdf invoice={invoiceData} />
-                    ) : (
-                      <div className="text-center py-12 text-gray-500">
-                        Complete the invoice form to see a preview
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </PersistentTabs>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Invoice Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <InvoiceForm
+                    company={company}
+                    customers={customers}
+                    products={products}
+                    isLoading={isLoadingCompany || isLoadingCustomers || isLoadingProducts}
+                    onDataChange={handleInvoiceDataChange}
+                    onSuccess={handleInvoiceSuccess}
+                  />
+                </CardContent>
+              </Card>
             )}
           </div>
         </main>

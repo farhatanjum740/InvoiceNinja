@@ -308,158 +308,224 @@ export default function InvoicesPage() {
         customer
       };
       
-      // Now use an async import to load the PDF generation libraries only when needed
+      // Import necessary libraries
+      const { default: { InvoiceTemplateRenderer } } = await import('@/components/invoice/invoice-template-renderer');
       const { jsPDF } = await import('jspdf');
       const { default: html2canvas } = await import('html2canvas');
       
-      // Create a temporary div to render the invoice
+      // Create a temporary div to render the invoice with the template renderer
       const tempDiv = document.createElement('div');
       tempDiv.style.width = '800px';
       tempDiv.style.position = 'absolute';
       tempDiv.style.left = '-9999px';
-      tempDiv.innerHTML = `
-        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-            <div>
-              <div style="font-size: 24px; font-weight: bold; color: #3b82f6;">INVOICE</div>
-              <div style="color: #666;">#${completeData.invoice.invoiceNumber}</div>
-            </div>
-          </div>
-          
-          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-            <div style="width: 48%;">
-              <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">From</div>
-              <div>${completeData.company.name}</div>
-              <div>${completeData.company.address || ''}</div>
-              <div>
-                ${completeData.company.city || ''}
-                ${completeData.company.state ? `, ${completeData.company.state}` : ''}
-                ${completeData.company.pincode ? ` - ${completeData.company.pincode}` : ''}
-              </div>
-              <div>GSTIN: ${completeData.company.gstin || 'N/A'}</div>
-              <div>Phone: ${completeData.company.phone || 'N/A'}</div>
-              <div>Email: ${completeData.company.email || 'N/A'}</div>
-            </div>
-            
-            <div style="width: 48%;">
-              <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Bill To</div>
-              <div>${completeData.customer.name}</div>
-              <div>${completeData.customer.billingAddress || ''}</div>
-              <div>
-                ${completeData.customer.billingCity || ''}
-                ${completeData.customer.billingState ? `, ${completeData.customer.billingState}` : ''}
-                ${completeData.customer.billingPincode ? ` - ${completeData.customer.billingPincode}` : ''}
-              </div>
-              <div>GSTIN: ${completeData.customer.gstin || 'N/A'}</div>
-              <div>Phone: ${completeData.customer.phone || 'N/A'}</div>
-              <div>Email: ${completeData.customer.email || 'N/A'}</div>
-            </div>
-          </div>
-          
-          <div style="margin-bottom: 30px;">
-            <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Invoice Details</div>
-            <div><strong>Issue Date:</strong> ${new Date(completeData.invoice.invoiceDate).toLocaleDateString('en-IN')}</div>
-            <div><strong>Due Date:</strong> ${completeData.invoice.dueDate ? new Date(completeData.invoice.dueDate).toLocaleDateString('en-IN') : 'N/A'}</div>
-            <div><strong>Status:</strong> ${completeData.invoice.status.toUpperCase()}</div>
-          </div>
-          
-          <div style="margin-bottom: 30px;">
-            <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Invoice Items</div>
-            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-              <thead>
-                <tr>
-                  <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Description</th>
-                  <th style="background-color: #f9fafb; text-align: left; padding: 10px;">HSN</th>
-                  <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Qty</th>
-                  <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Rate</th>
-                  <th style="background-color: #f9fafb; text-align: left; padding: 10px;">GST</th>
-                  <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${completeData.items.map((item: any) => `
-                  <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.description}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.hsnCode}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;">${parseFloat(String(item.quantity)).toLocaleString('en-IN')} ${item.unit || 'Piece'}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;">₹${parseFloat(String(item.rate)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.gstRate}%</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;">₹${parseFloat(String(item.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-          
-          <div style="margin-left: auto; width: 250px; margin-top: 30px;">
-            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-              <div style="font-weight: bold;">Subtotal:</div>
-              <div>₹${parseFloat(completeData.invoice.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            ${parseFloat(completeData.invoice.cgst) > 0 ? `
-            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-              <div style="font-weight: bold;">CGST:</div>
-              <div>₹${parseFloat(completeData.invoice.cgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            ` : ''}
-            ${parseFloat(completeData.invoice.sgst) > 0 ? `
-            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-              <div style="font-weight: bold;">SGST:</div>
-              <div>₹${parseFloat(completeData.invoice.sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            ` : ''}
-            ${parseFloat(completeData.invoice.igst) > 0 ? `
-            <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-              <div style="font-weight: bold;">IGST:</div>
-              <div>₹${parseFloat(completeData.invoice.igst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            ` : ''}
-            <div style="display: flex; justify-content: space-between; padding: 5px 0; font-weight: bold; border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;">
-              <div>Total:</div>
-              <div>₹${parseFloat(completeData.invoice.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-          </div>
-          
-          <div style="margin-top: 30px; background-color: #f9fafb; padding: 15px; border-radius: 4px;">
-            <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Notes</div>
-            <div>${completeData.invoice.notes || 'No additional notes.'}</div>
-          </div>
-          
-          <div style="margin-top: 30px; background-color: #f9fafb; padding: 15px; border-radius: 4px;">
-            <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Terms & Conditions</div>
-            <div>${completeData.invoice.termsAndConditions ? completeData.invoice.termsAndConditions.replace(/\n/g, '<br>') : 'No terms specified.'}</div>
-          </div>
-        </div>
-      `;
+      tempDiv.className = 'bg-white p-0 overflow-hidden rounded-lg';
       
+      // Append to document for rendering
       document.body.appendChild(tempDiv);
       
       try {
-        // Convert the HTML to canvas
+        // Create a root element for React rendering
+        const root = document.createElement('div');
+        root.className = 'invoice-pdf-container';
+        tempDiv.appendChild(root);
+        
+        // Manually inject HTML with the template rendering
+        const templateId = (company && company.templateId) ? company.templateId : "standard";
+        const colorTheme = (company && company.colorTheme) ? company.colorTheme : "blue";
+        
+        // Create HTML using similar structure as the InvoiceTemplateRenderer
+        // This is a simplified version, but follows the same structure
+        let templateHTML = '';
+        
+        // Basic template with company header, customer info, and items
+        templateHTML = `
+          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+              <div>
+                <div style="font-size: 24px; font-weight: bold; color: #3b82f6;">INVOICE</div>
+                <div style="color: #666;">#${completeData.invoice.invoiceNumber}</div>
+              </div>
+              ${company.logoUrl ? `<div><img src="${company.logoUrl}" style="max-height: 80px; max-width: 200px;" /></div>` : ''}
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+              <div style="width: 48%;">
+                <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">From</div>
+                <div>${completeData.company.name}</div>
+                <div>${completeData.company.address || ''}</div>
+                <div>
+                  ${completeData.company.city || ''}
+                  ${completeData.company.state ? `, ${completeData.company.state}` : ''}
+                  ${completeData.company.pincode ? ` - ${completeData.company.pincode}` : ''}
+                </div>
+                <div>GSTIN: ${completeData.company.gstin || 'N/A'}</div>
+                <div>Phone: ${completeData.company.phone || 'N/A'}</div>
+                <div>Email: ${completeData.company.email || 'N/A'}</div>
+              </div>
+              
+              <div style="width: 48%;">
+                <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Bill To</div>
+                <div>${completeData.customer.name}</div>
+                <div>${completeData.customer.billingAddress || ''}</div>
+                <div>
+                  ${completeData.customer.billingCity || ''}
+                  ${completeData.customer.billingState ? `, ${completeData.customer.billingState}` : ''}
+                  ${completeData.customer.billingPincode ? ` - ${completeData.customer.billingPincode}` : ''}
+                </div>
+                <div>GSTIN: ${completeData.customer.gstin || 'N/A'}</div>
+                <div>Phone: ${completeData.customer.phone || 'N/A'}</div>
+                <div>Email: ${completeData.customer.email || 'N/A'}</div>
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 30px;">
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Invoice Details</div>
+              <div><strong>Issue Date:</strong> ${new Date(completeData.invoice.invoiceDate).toLocaleDateString('en-IN')}</div>
+              <div><strong>Due Date:</strong> ${completeData.invoice.dueDate ? new Date(completeData.invoice.dueDate).toLocaleDateString('en-IN') : 'N/A'}</div>
+              <div><strong>Status:</strong> ${completeData.invoice.status.toUpperCase()}</div>
+            </div>
+            
+            <div style="margin-bottom: 30px;">
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Invoice Items</div>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <thead>
+                  <tr>
+                    <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Description</th>
+                    <th style="background-color: #f9fafb; text-align: left; padding: 10px;">HSN</th>
+                    <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Qty</th>
+                    <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Rate</th>
+                    <th style="background-color: #f9fafb; text-align: left; padding: 10px;">GST</th>
+                    <th style="background-color: #f9fafb; text-align: left; padding: 10px;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${completeData.items.map((item: any) => `
+                    <tr>
+                      <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.description}</td>
+                      <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.hsnCode || '-'}</td>
+                      <td style="padding: 10px; border-bottom: 1px solid #eee;">${parseFloat(String(item.quantity)).toLocaleString('en-IN')} ${item.unit || 'Piece'}</td>
+                      <td style="padding: 10px; border-bottom: 1px solid #eee;">₹${parseFloat(String(item.rate)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.gstRate}%</td>
+                      <td style="padding: 10px; border-bottom: 1px solid #eee;">₹${parseFloat(String(item.amount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            
+            <div style="margin-left: auto; width: 250px; margin-top: 30px;">
+              <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <div style="font-weight: bold;">Subtotal:</div>
+                <div>₹${parseFloat(completeData.invoice.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              ${parseFloat(completeData.invoice.cgst) > 0 ? `
+              <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <div style="font-weight: bold;">CGST:</div>
+                <div>₹${parseFloat(completeData.invoice.cgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              ` : ''}
+              ${parseFloat(completeData.invoice.sgst) > 0 ? `
+              <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <div style="font-weight: bold;">SGST:</div>
+                <div>₹${parseFloat(completeData.invoice.sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              ` : ''}
+              ${parseFloat(completeData.invoice.igst) > 0 ? `
+              <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <div style="font-weight: bold;">IGST:</div>
+                <div>₹${parseFloat(completeData.invoice.igst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              ` : ''}
+              <div style="display: flex; justify-content: space-between; padding: 5px 0; font-weight: bold; border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px;">
+                <div>Total:</div>
+                <div>₹${parseFloat(completeData.invoice.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+            
+            <div style="margin-top: 30px; background-color: #f9fafb; padding: 15px; border-radius: 4px;">
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Notes</div>
+              <div>${completeData.invoice.notes || 'No additional notes.'}</div>
+            </div>
+            
+            <div style="margin-top: 30px; background-color: #f9fafb; padding: 15px; border-radius: 4px;">
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Terms & Conditions</div>
+              <div>${completeData.invoice.termsAndConditions ? completeData.invoice.termsAndConditions.replace(/\n/g, '<br>') : 'No terms specified.'}</div>
+            </div>
+
+            ${completeData.invoice.amountInWords ? `
+            <div style="margin-top: 20px; font-style: italic; font-size: 0.9em;">
+              Amount in words: <strong>${completeData.invoice.amountInWords}</strong>
+            </div>
+            ` : ''}
+
+            ${completeData.company.bankDetails ? `
+            <div style="margin-top: 20px; border-top: 1px dashed #ccc; padding-top: 15px;">
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">Bank Details</div>
+              <div style="white-space: pre-line;">${completeData.company.bankDetails}</div>
+            </div>
+            ` : ''}
+          </div>
+        `;
+        
+        // Set innerHTML of the root element
+        root.innerHTML = templateHTML;
+        
+        // Convert the HTML to canvas with higher quality
         const canvas = await html2canvas(tempDiv, {
           scale: 2, // Higher scale for better quality
           useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
           logging: false
         });
         
-        // Create PDF
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgData = canvas.toDataURL('image/png');
+        // Create PDF with A4 dimensions
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+          compress: true, // Enable compression
+        });
+        
+        // Use JPEG for smaller file size
+        const imgData = canvas.toDataURL('image/jpeg', 0.8);
         const imgWidth = 210; // A4 width in mm
         const pageHeight = 297; // A4 height in mm
         const imgHeight = canvas.height * imgWidth / canvas.width;
-        let heightLeft = imgHeight;
-        let position = 0;
         
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        // Add image to PDF
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
         
         // Add new pages if the content doesn't fit on one page
-        while (heightLeft >= 0) {
-          position = heightLeft - imgHeight;
+        let heightLeft = imgHeight - pageHeight;
+        let position = -pageHeight;
+        let pageNum = 2;
+        const totalPages = Math.ceil(imgHeight / pageHeight);
+        
+        // Add page number to first page
+        if (totalPages > 1) {
+          pdf.setFontSize(8);
+          pdf.setTextColor(100, 100, 100);
+          pdf.text(`Page 1 of ${totalPages}`, imgWidth - 10, pageHeight - 5, { align: 'right' });
+        }
+        
+        // Add subsequent pages if needed
+        while (heightLeft > 0) {
           pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          position = position - pageHeight;
+          
+          // Add the image with the correct position offset
+          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+          
+          // Add page numbers
+          if (totalPages > 1) {
+            pdf.setFontSize(8);
+            pdf.setTextColor(100, 100, 100);
+            pdf.text(`Page ${pageNum} of ${totalPages}`, imgWidth - 10, pageHeight - 5, { align: 'right' });
+          }
+          
           heightLeft -= pageHeight;
+          pageNum++;
         }
         
         // Save the PDF
