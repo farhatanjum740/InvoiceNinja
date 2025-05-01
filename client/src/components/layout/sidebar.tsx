@@ -54,6 +54,11 @@ export function Sidebar({ className }: SidebarProps) {
       href: "/settings",
       icon: Settings,
     },
+    {
+      title: "Storage Test",
+      href: "/storage-test",
+      icon: FolderArchive,
+    },
   ];
 
   const isActive = (path: string) => {

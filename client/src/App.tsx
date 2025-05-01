@@ -15,6 +15,7 @@ import CustomersPage from "@/pages/customers-page";
 import ProductsPage from "@/pages/products-page";
 import CompanyPage from "@/pages/company-page";
 import ReportsPage from "@/pages/reports-page";
+import StorageTestPage from "@/pages/storage-test-page";
 
 // Auth Provider
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -66,6 +67,7 @@ function AppRoutes() {
       <ProtectedRoute path="/products" component={ProductsPage} />
       <ProtectedRoute path="/company" component={CompanyPage} />
       <ProtectedRoute path="/reports" component={ReportsPage} />
+      <ProtectedRoute path="/storage-test" component={StorageTestPage} />
       
       {/* Fallback 404 page */}
       <Route component={NotFound} />
