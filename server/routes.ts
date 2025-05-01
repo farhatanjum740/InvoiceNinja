@@ -557,18 +557,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const invoiceWithItems = await storage.getInvoiceWithItems(invoiceId);
       
-      // Log the response for debugging
-      console.log("Invoice response data:", JSON.stringify({
+      // Fix T18:30:00 dates on the server side
+      // This is more reliable than client-side fixes
+      const fixedInvoice = {
+        ...invoiceWithItems.invoice
+      };
+      
+      // Handle the specific date format that's causing issues (18:30:00 UTC timestamps)
+      if (fixedInvoice.invoiceDate && typeof fixedInvoice.invoiceDate === 'string' && 
+          fixedInvoice.invoiceDate.includes('T18:30:00')) {
+        // Extract date part (YYYY-MM-DD), parse it, and add one day
+        const datePart = fixedInvoice.invoiceDate.split('T')[0];
+        const [year, month, day] = datePart.split('-').map(num => parseInt(num));
+        
+        // Create a new date using local time zone (add one day for Indian timezone)
+        const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
+        
+        // Format as ISO string but only keep the date part (YYYY-MM-DD)
+        fixedInvoice.invoiceDate = correctedDate.toISOString().split('T')[0];
+        console.log("SERVER: Fixed invoice date from", datePart, "to", fixedInvoice.invoiceDate);
+      }
+      
+      // Do the same for due date
+      if (fixedInvoice.dueDate && typeof fixedInvoice.dueDate === 'string' && 
+          fixedInvoice.dueDate.includes('T18:30:00')) {
+        // Extract date part (YYYY-MM-DD), parse it, and add one day
+        const datePart = fixedInvoice.dueDate.split('T')[0];
+        const [year, month, day] = datePart.split('-').map(num => parseInt(num));
+        
+        // Create a new date using local time zone (add one day for Indian timezone)
+        const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
+        
+        // Format as ISO string but only keep the date part (YYYY-MM-DD)
+        fixedInvoice.dueDate = correctedDate.toISOString().split('T')[0];
+        console.log("SERVER: Fixed due date from", datePart, "to", fixedInvoice.dueDate);
+      }
+      
+      const fixedResponse = {
+        invoice: fixedInvoice,
+        items: invoiceWithItems.items
+      };
+      
+      // Log the fixed response for debugging
+      console.log("Invoice response data (with fixed dates):", JSON.stringify({
         invoice: {
-          ...invoiceWithItems.invoice,
+          ...fixedResponse.invoice,
           // Don't log sensitive fields
           password: undefined
         },
-        itemsCount: invoiceWithItems.items.length,
-        sampleItem: invoiceWithItems.items[0] || null
+        itemsCount: fixedResponse.items.length,
+        sampleItem: fixedResponse.items[0] || null
       }, null, 2));
       
-      return res.json(invoiceWithItems);
+      return res.json(fixedResponse);
     } catch (error) {
       console.error("Error fetching invoice:", error);
       return res.status(500).json({ error: "Server error" });
