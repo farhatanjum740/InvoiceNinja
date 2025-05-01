@@ -17,6 +17,7 @@ import CompanyPage from "@/pages/company-page";
 import ReportsPage from "@/pages/reports-page";
 import StorageTestPage from "@/pages/storage-test-page";
 import SupabaseTestPage from "@/pages/supabase-test-page";
+import TestPage from "@/pages/test-page";
 
 // Auth Provider
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -70,6 +71,9 @@ function AppRoutes() {
       <ProtectedRoute path="/reports" component={ReportsPage} />
       <ProtectedRoute path="/storage-test" component={StorageTestPage} />
       <ProtectedRoute path="/supabase-test" component={SupabaseTestPage} />
+      
+      {/* Public test route */}
+      <PublicRoute path="/test" component={TestPage} />
       
       {/* Fallback 404 page */}
       <Route component={NotFound} />
