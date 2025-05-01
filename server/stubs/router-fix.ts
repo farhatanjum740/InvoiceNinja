@@ -17,24 +17,20 @@ export function createRouterFixMiddleware(app: express.Express) {
     '/settings*'
   ];
   
-  // In development, we don't need to handle these routes specially
-  // as Vite's development server already handles this correctly
-  if (process.env.NODE_ENV === 'development') {
-    // Add debug handler to check routing in development
-    app.get('/router-debug', (req, res) => {
-      res.json({
-        message: 'Router debug endpoint active',
-        environment: 'development',
-        patterns: clientSidePatterns,
-        note: 'In development, Vite handles all routing automatically'
-      });
+  // Always add a debug handler to check routing
+  app.get('/router-debug', (req, res) => {
+    res.json({
+      message: 'Router debug endpoint active',
+      environment: process.env.NODE_ENV,
+      patterns: clientSidePatterns,
+      note: `Router fix is active for ${process.env.NODE_ENV} environment`
     });
-    
-    return app;
-  }
+  });
   
-  // In production, set up handlers for each pattern
-  console.log('Setting up production client-side routing handlers');
+  // We need to handle client-side routes in both development and production
+  // Vite has issues with direct navigation to nested routes
+  
+  console.log(`Setting up client-side routing handlers for ${process.env.NODE_ENV} environment`);
   
   // Create a catch-all handler that checks if the URL matches any of our patterns
   app.get('*', (req, res, next) => {
@@ -53,9 +49,17 @@ export function createRouterFixMiddleware(app: express.Express) {
     
     if (isClientRoute) {
       console.log(`Handling client-side route: ${requestPath}`);
-      // In production, serve the index.html file
-      const distPath = path.resolve(process.cwd(), 'dist', 'public');
-      return res.sendFile(path.resolve(distPath, 'index.html'));
+      
+      if (process.env.NODE_ENV === 'production') {
+        // In production, serve the index.html file from the dist directory
+        const distPath = path.resolve(process.cwd(), 'dist', 'public');
+        return res.sendFile(path.resolve(distPath, 'index.html'));
+      } else {
+        // In development, serve the client's index.html file
+        const clientIndexPath = path.resolve(process.cwd(), 'client', 'index.html');
+        console.log(`Serving client index from: ${clientIndexPath}`);
+        return res.sendFile(clientIndexPath);
+      }
     }
     
     // Not a known client route, proceed to next handler
