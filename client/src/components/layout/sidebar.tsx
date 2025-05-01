@@ -4,7 +4,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { BarChart3, ReceiptText, Users, Package2, FileBarChart, Building2, Settings, Menu, LogOut } from "lucide-react";
+import { BarChart3, ReceiptText, Users, Package2, FileBarChart, Building2, Settings, Menu, LogOut, Database } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
@@ -57,7 +57,7 @@ export function Sidebar({ className }: SidebarProps) {
     {
       title: "Storage Test",
       href: "/storage-test",
-      icon: FolderArchive,
+      icon: Database,
     },
   ];
 
