@@ -49,9 +49,7 @@ app.use((req, res, next) => {
   
   const server = await registerRoutes(app);
   
-  // Apply our router fix middleware to ensure all client routes work properly
-  createRouterFixMiddleware(app);
-
+  // Add error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -60,13 +58,17 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Apply our router fix middleware first in development to register debug routes
   if (app.get("env") === "development") {
+    // In development, apply router fix first, then setupVite
+    createRouterFixMiddleware(app);
     await setupVite(app, server);
+    console.log('Development server mode: Router fix applied + Vite setup');
   } else {
+    // In production, apply static file serving first, then router fix
     serveStatic(app);
+    createRouterFixMiddleware(app);
+    console.log('Production server mode: Static files + Router fix applied');
   }
 
   // ALWAYS serve the app on port 5000
