@@ -446,7 +446,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       const invoices = await storage.getInvoicesByUserId(req.user.id);
-      return res.json(invoices);
+      
+      // Helper function to normalize any date to YYYY-MM-DD format
+      const normalizeDate = (dateValue) => {
+        if (!dateValue) return null;
+        
+        try {
+          // For T18:30:00 UTC format (special Indian date case)
+          if (typeof dateValue === 'string' && dateValue.includes('T18:30:00')) {
+            // Extract date part (YYYY-MM-DD), parse it, and add one day
+            const datePart = dateValue.split('T')[0];
+            const [year, month, day] = datePart.split('-').map(num => parseInt(num));
+            
+            // Create a new date using local time zone (add one day for Indian timezone)
+            const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
+            
+            // Format as ISO string but only keep the date part (YYYY-MM-DD)
+            return correctedDate.toISOString().split('T')[0];
+          } 
+          // For any other date format
+          else {
+            let dateObj;
+            if (dateValue instanceof Date) {
+              dateObj = dateValue;
+            } else {
+              dateObj = new Date(dateValue);
+            }
+            
+            if (isNaN(dateObj.getTime())) {
+              console.warn("SERVER: Invalid date detected:", dateValue);
+              return null;
+            }
+            
+            return dateObj.toISOString().split('T')[0];
+          }
+        } catch (err) {
+          console.error("SERVER: Error normalizing date:", err);
+          return null;
+        }
+      };
+      
+      // Fix all dates in the invoices list
+      const fixedInvoices = invoices.map(invoice => {
+        const fixedInvoice = {...invoice};
+        
+        // Handle invoice date
+        if (fixedInvoice.invoiceDate) {
+          const originalDate = fixedInvoice.invoiceDate;
+          fixedInvoice.invoiceDate = normalizeDate(originalDate);
+          if (originalDate !== fixedInvoice.invoiceDate) {
+            console.log(`Fixed invoice ${fixedInvoice.id} date from ${originalDate} to ${fixedInvoice.invoiceDate}`);
+          }
+        }
+        
+        // Handle due date
+        if (fixedInvoice.dueDate) {
+          const originalDueDate = fixedInvoice.dueDate;
+          fixedInvoice.dueDate = normalizeDate(originalDueDate);
+          if (originalDueDate !== fixedInvoice.dueDate) {
+            console.log(`Fixed invoice ${fixedInvoice.id} due date from ${originalDueDate} to ${fixedInvoice.dueDate}`);
+          }
+        }
+        
+        return fixedInvoice;
+      });
+      
+      return res.json(fixedInvoices);
     } catch (error) {
       console.error("Error fetching invoices:", error);
       return res.status(500).json({ error: "Server error" });
@@ -557,40 +622,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const invoiceWithItems = await storage.getInvoiceWithItems(invoiceId);
       
-      // Fix T18:30:00 dates on the server side
-      // This is more reliable than client-side fixes
+      // Normalize all dates to YYYY-MM-DD format on the server side for consistency
       const fixedInvoice = {
         ...invoiceWithItems.invoice
       };
       
-      // Handle the specific date format that's causing issues (18:30:00 UTC timestamps)
-      if (fixedInvoice.invoiceDate && typeof fixedInvoice.invoiceDate === 'string' && 
-          fixedInvoice.invoiceDate.includes('T18:30:00')) {
-        // Extract date part (YYYY-MM-DD), parse it, and add one day
-        const datePart = fixedInvoice.invoiceDate.split('T')[0];
-        const [year, month, day] = datePart.split('-').map(num => parseInt(num));
+      // Helper function to normalize any date to YYYY-MM-DD format
+      const normalizeDate = (dateValue) => {
+        if (!dateValue) return null;
         
-        // Create a new date using local time zone (add one day for Indian timezone)
-        const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
-        
-        // Format as ISO string but only keep the date part (YYYY-MM-DD)
-        fixedInvoice.invoiceDate = correctedDate.toISOString().split('T')[0];
-        console.log("SERVER: Fixed invoice date from", datePart, "to", fixedInvoice.invoiceDate);
+        try {
+          // For T18:30:00 UTC format (special Indian date case)
+          if (typeof dateValue === 'string' && dateValue.includes('T18:30:00')) {
+            // Extract date part (YYYY-MM-DD), parse it, and add one day
+            const datePart = dateValue.split('T')[0];
+            const [year, month, day] = datePart.split('-').map(num => parseInt(num));
+            
+            // Create a new date using local time zone (add one day for Indian timezone)
+            const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
+            
+            // Format as ISO string but only keep the date part (YYYY-MM-DD)
+            return correctedDate.toISOString().split('T')[0];
+          } 
+          // For any other date format
+          else {
+            let dateObj;
+            if (dateValue instanceof Date) {
+              dateObj = dateValue;
+            } else {
+              dateObj = new Date(dateValue);
+            }
+            
+            if (isNaN(dateObj.getTime())) {
+              console.warn("SERVER: Invalid date detected:", dateValue);
+              return null;
+            }
+            
+            return dateObj.toISOString().split('T')[0];
+          }
+        } catch (err) {
+          console.error("SERVER: Error normalizing date:", err);
+          return null;
+        }
+      };
+      
+      // Handle invoice date
+      const originalInvoiceDate = fixedInvoice.invoiceDate;
+      fixedInvoice.invoiceDate = normalizeDate(originalInvoiceDate);
+      if (originalInvoiceDate !== fixedInvoice.invoiceDate) {
+        console.log("SERVER: Fixed invoice date from", originalInvoiceDate, "to", fixedInvoice.invoiceDate);
       }
       
-      // Do the same for due date
-      if (fixedInvoice.dueDate && typeof fixedInvoice.dueDate === 'string' && 
-          fixedInvoice.dueDate.includes('T18:30:00')) {
-        // Extract date part (YYYY-MM-DD), parse it, and add one day
-        const datePart = fixedInvoice.dueDate.split('T')[0];
-        const [year, month, day] = datePart.split('-').map(num => parseInt(num));
-        
-        // Create a new date using local time zone (add one day for Indian timezone)
-        const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
-        
-        // Format as ISO string but only keep the date part (YYYY-MM-DD)
-        fixedInvoice.dueDate = correctedDate.toISOString().split('T')[0];
-        console.log("SERVER: Fixed due date from", datePart, "to", fixedInvoice.dueDate);
+      // Handle due date
+      const originalDueDate = fixedInvoice.dueDate;
+      fixedInvoice.dueDate = normalizeDate(originalDueDate);
+      if (originalDueDate !== fixedInvoice.dueDate) {
+        console.log("SERVER: Fixed due date from", originalDueDate, "to", fixedInvoice.dueDate);
       }
       
       const fixedResponse = {
