@@ -18,7 +18,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
+
+// Safe date formatting utility function
+const formatDateSafe = (date: any) => {
+  try {
+    if (!date) return "";
+    const dateObj = new Date(date);
+    if (!isValid(dateObj)) return "Invalid date";
+    return format(dateObj, "PPP");
+  } catch (error) {
+    console.error("Date format error:", error);
+    return "Invalid date";
+  }
+};
 import { cn } from "@/lib/utils";
 import { CalendarIcon, Loader2, PlusIcon, Trash2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
