@@ -11,11 +11,31 @@ import { CalendarIcon } from "lucide-react";
 const formatDateSafe = (date: any) => {
   try {
     if (!date) return "";
-    const dateObj = new Date(date);
-    if (!isValid(dateObj)) return "Invalid date";
+    
+    // Add debugging to see what kind of date value we're receiving
+    console.log("Date value type:", typeof date, "Value:", date);
+    
+    // Handle different date formats
+    let dateObj;
+    if (date instanceof Date) {
+      dateObj = date;
+    } else if (typeof date === 'string') {
+      // Handle ISO string format from Supabase
+      dateObj = new Date(date);
+    } else {
+      // Try to convert other formats
+      dateObj = new Date(date);
+    }
+    
+    // Validate the date
+    if (!isValid(dateObj)) {
+      console.warn("Invalid date object created from:", date);
+      return "Invalid date";
+    }
+    
     return format(dateObj, "PPP");
   } catch (error) {
-    console.error("Date format error:", error);
+    console.error("Date format error:", error, "for input:", date);
     return "Invalid date";
   }
 };

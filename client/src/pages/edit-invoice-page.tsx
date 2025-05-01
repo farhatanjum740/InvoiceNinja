@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isValid, parseISO } from "date-fns";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -62,9 +63,83 @@ export default function EditInvoicePage() {
       
       const formData = {
         ...invoice,
-        // Parse dates properly
-        invoiceDate: invoice.invoiceDate ? new Date(invoice.invoiceDate) : null,
-        dueDate: invoice.dueDate ? new Date(invoice.dueDate) : null,
+        // Parse dates properly with better error handling
+        invoiceDate: (() => {
+          try {
+            if (!invoice.invoiceDate) return null;
+            
+            // Try to parse the date using different approaches
+            console.log("Original invoiceDate from Supabase:", invoice.invoiceDate);
+            
+            // First attempt: Parse as ISO string with date-fns
+            if (typeof invoice.invoiceDate === 'string') {
+              try {
+                // Try to parse as ISO string
+                const parsedDate = parseISO(invoice.invoiceDate);
+                console.log("Parsed using parseISO:", parsedDate, "Valid?", isValid(parsedDate));
+                
+                if (isValid(parsedDate)) {
+                  return parsedDate;
+                }
+              } catch (error) {
+                console.warn("parseISO failed:", error);
+              }
+            }
+            
+            // Second attempt: Use JavaScript Date constructor
+            const dateObj = new Date(invoice.invoiceDate);
+            console.log("Parsed using Date constructor:", dateObj, "Valid?", !isNaN(dateObj.getTime()));
+            
+            if (!isNaN(dateObj.getTime())) {
+              return dateObj;
+            }
+            
+            // If all parsing attempts fail, return current date
+            console.warn("All date parsing attempts failed, using current date");
+            return new Date();
+          } catch (err) {
+            console.error("Error parsing invoice date:", err);
+            return new Date(); // Fallback to current date if parsing fails
+          }
+        })(),
+        dueDate: (() => {
+          try {
+            if (!invoice.dueDate) return null;
+            
+            // Try to parse the date using different approaches
+            console.log("Original dueDate from Supabase:", invoice.dueDate);
+            
+            // First attempt: Parse as ISO string with date-fns
+            if (typeof invoice.dueDate === 'string') {
+              try {
+                // Try to parse as ISO string
+                const parsedDate = parseISO(invoice.dueDate);
+                console.log("Parsed dueDate using parseISO:", parsedDate, "Valid?", isValid(parsedDate));
+                
+                if (isValid(parsedDate)) {
+                  return parsedDate;
+                }
+              } catch (error) {
+                console.warn("parseISO failed for dueDate:", error);
+              }
+            }
+            
+            // Second attempt: Use JavaScript Date constructor
+            const dateObj = new Date(invoice.dueDate);
+            console.log("Parsed dueDate using Date constructor:", dateObj, "Valid?", !isNaN(dateObj.getTime()));
+            
+            if (!isNaN(dateObj.getTime())) {
+              return dateObj;
+            }
+            
+            // If all parsing attempts fail, return null as due date is optional
+            console.warn("All dueDate parsing attempts failed, using null");
+            return null;
+          } catch (err) {
+            console.error("Error parsing due date:", err);
+            return null;
+          }
+        })(),
         items: invoiceDetails.items
       };
       
