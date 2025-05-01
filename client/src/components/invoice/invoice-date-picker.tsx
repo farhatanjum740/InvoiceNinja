@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, isValid } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { FormControl } from "@/components/ui/form";
@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 
-// Safe date formatting utility function with robust fallbacks
+// Safe date formatting utility function with robust timezone handling
 const formatDateSafe = (date: any) => {
   try {
     if (!date) return "";
@@ -17,17 +17,39 @@ const formatDateSafe = (date: any) => {
     
     // Case 1: Already a valid Date object
     if (date instanceof Date && !isNaN(date.getTime())) {
+      // Use the date directly, preserving timezone
       return format(date, "PPP");
     }
     
     // Case 2: ISO string or other string format
     if (typeof date === 'string') {
-      // Try different parsing strategies
+      // Special handling for ISO strings with timezone information
+      if (date.includes('T') && (date.includes('Z') || date.includes('+') || date.includes('-'))) {
+        // This is an ISO format string with timezone - use parseISO to properly handle it
+        try {
+          const parsedDate = parseISO(date);
+          if (isValid(parsedDate)) {
+            // When an ISO string is parsed, it's interpreted in the local timezone
+            console.log("Parsed ISO date:", parsedDate, "Original:", date);
+            return format(parsedDate, "PPP");
+          }
+        } catch (e) {
+          console.warn("parseISO failed on ISO string:", e);
+        }
+      }
       
       // Strategy 1: Using Date constructor directly
       let dateObj = new Date(date);
       if (!isNaN(dateObj.getTime())) {
-        return format(dateObj, "PPP");
+        // Use UTC date components to avoid timezone shifts
+        const year = dateObj.getUTCFullYear();
+        const month = dateObj.getUTCMonth();
+        const day = dateObj.getUTCDate();
+        
+        // Create a new date using local timezone with the same day
+        const localDate = new Date(year, month, day);
+        console.log("Preserving date components from:", date, "As:", localDate);
+        return format(localDate, "PPP");
       }
       
       // Strategy 2: Try to handle formats like YYYY-MM-DD
@@ -55,7 +77,13 @@ const formatDateSafe = (date: any) => {
     // Case 3: If it's another type, make a last attempt
     const fallbackDate = new Date(date);
     if (!isNaN(fallbackDate.getTime())) {
-      return format(fallbackDate, "PPP");
+      // Use UTC components to preserve the date across timezones
+      const year = fallbackDate.getUTCFullYear();
+      const month = fallbackDate.getUTCMonth();
+      const day = fallbackDate.getUTCDate();
+      
+      const localDate = new Date(year, month, day);
+      return format(localDate, "PPP");
     }
     
     // If we got here, we couldn't parse the date
@@ -101,12 +129,40 @@ export function InvoiceDatePicker({ field, label, isRequired = false }: DatePick
         <Calendar
           mode="single"
           selected={(() => {
-            // Ensure we pass a valid date to the Calendar
+            // Ensure we pass a valid date to the Calendar with proper timezone handling
             if (!field.value) return undefined;
             
             try {
+              // Special handling for ISO strings with timezone
+              if (typeof field.value === 'string' && 
+                  field.value.includes('T') && 
+                  (field.value.includes('Z') || field.value.includes('+') || field.value.includes('-'))) {
+                
+                // Parse with parseISO to handle timezone correctly
+                const parsedDate = parseISO(field.value);
+                console.log("Calendar - parsed ISO date:", parsedDate, "Original:", field.value);
+                
+                if (isValid(parsedDate)) {
+                  return parsedDate;
+                }
+              }
+              
+              // Standard date parsing with timezone preservation
               const dateObj = new Date(field.value);
-              return isNaN(dateObj.getTime()) ? new Date() : dateObj;
+              
+              if (!isNaN(dateObj.getTime())) {
+                // Use UTC date components to avoid timezone shifts
+                const year = dateObj.getUTCFullYear();
+                const month = dateObj.getUTCMonth();
+                const day = dateObj.getUTCDate();
+                
+                // Create a new date using local timezone with the same day
+                const localDate = new Date(year, month, day);
+                console.log("Calendar - preserving date from:", field.value, "As:", localDate);
+                return localDate;
+              }
+              
+              return new Date(); // Fallback to current date
             } catch (e) {
               console.error("Error parsing date for Calendar:", e);
               return new Date(); // Fallback to current date
