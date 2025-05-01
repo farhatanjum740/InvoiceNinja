@@ -97,8 +97,15 @@ export async function uploadFile(
     const timestamp = new Date().getTime();
     const filePathPrefix = path ? `${path}/${timestamp}` : `${timestamp}`;
     
+    // Create a FormData object
+    const formData = new FormData();
+    formData.append('file', file);
+    if (filePathPrefix) {
+      formData.append('path', filePathPrefix);
+    }
+    
     // Use our server-side storage API for upload
-    const result = await apiUploadFile(bucket, file, filePathPrefix);
+    const result = await apiUploadFile(bucket, formData);
     
     return {
       path: result.path,
