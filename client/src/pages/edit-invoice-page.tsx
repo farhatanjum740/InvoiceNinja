@@ -63,40 +63,31 @@ export default function EditInvoicePage() {
       
       const formData = {
         ...invoice,
-        // Parse dates properly with better error handling
+        // COMPLETELY REIMPLEMENTED DATE PARSING LOGIC
         invoiceDate: (() => {
           try {
             if (!invoice.invoiceDate) return null;
             
             // Log the original date for debugging
-            console.log("Original invoiceDate from Supabase:", invoice.invoiceDate);
+            console.log("ROBUST FIX - Original invoiceDate from API:", invoice.invoiceDate);
             
-            // DIRECT FIX: Check if this is the specific format with 18:30:00 UTC time (India's next day)
-            // This is a special case for the invoice with 18:30 UTC (midnight India time)
-            // Added extra debug log statements
-            console.log("🔍 DETAILED DEBUG - invoice.invoiceDate value:", invoice.invoiceDate);
-            console.log("🔍 DETAILED DEBUG - invoice.invoiceDate type:", typeof invoice.invoiceDate);
-            console.log("🔍 DETAILED DEBUG - String tests:", {
-              includes_T18_30: typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('T18:30:00'),
-              includes_plus_00_00: typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('+00:00'),
-              exact_pattern: typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('T18:30:00+00:00')
-            });
-            
-            // Broader check for any date with T18:30:00 UTC time pattern (likely means next day in India)
-            if (typeof invoice.invoiceDate === 'string' && 
-                (invoice.invoiceDate.includes('T18:30:00+00:00') || 
-                 (invoice.invoiceDate.includes('T18:30:00') && invoice.invoiceDate.includes('+00:00')))) {
-              console.log("✅ Detected special case for Indian next-day invoice");
-              const dateParts = invoice.invoiceDate.split('T')[0].split('-');
-              if (dateParts.length === 3) {
-                const year = parseInt(dateParts[0]);
-                const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
-                const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
-                
-                const localDate = new Date(year, month, day);
-                console.log("✅ Successfully converted to local Indian date:", localDate, "showing as", format(localDate, "PPP"));
-                return localDate;
-              }
+            // TARGETED APPROACH FOR 18:30 UTC FORMAT
+            if (typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('T18:30:00')) {
+              console.log("🔧 HARDCODED FIX - Detected 18:30 UTC timestamp");
+              
+              // Extract just the date part (YYYY-MM-DD) and add one day
+              const datePart = invoice.invoiceDate.split('T')[0]; // "2025-05-01"
+              
+              // Get tomorrow's date (since 18:30 UTC = next day in India)
+              const [year, month, day] = datePart.split('-').map(num => parseInt(num));
+              
+              // Create date with day+1 (next day in India) - months are 0-indexed in JS
+              const fixedDate = new Date(year, month-1, day+1, 12, 0, 0);
+              
+              console.log("🔧 HARDCODED FIX - Created fixed date:", fixedDate, 
+                "from parts:", {year, month, day: day+1});
+              
+              return fixedDate;
             }
             
             // First attempt: Parse as ISO string with date-fns
@@ -135,34 +126,25 @@ export default function EditInvoicePage() {
             if (!invoice.dueDate) return null;
             
             // Log the original date for debugging
-            console.log("Original dueDate from Supabase:", invoice.dueDate);
+            console.log("ROBUST FIX - Original dueDate from API:", invoice.dueDate);
             
-            // DIRECT FIX: Check if this is the specific format with 18:30:00 UTC time (India's next day)
-            // This is a special case for due dates with 18:30 UTC (midnight India time)
-            // Added extra debug log statements
-            console.log("🔍 DETAILED DEBUG - invoice.dueDate value:", invoice.dueDate);
-            console.log("🔍 DETAILED DEBUG - invoice.dueDate type:", typeof invoice.dueDate);
-            console.log("🔍 DETAILED DEBUG - Due Date String tests:", {
-              includes_T18_30: typeof invoice.dueDate === 'string' && invoice.dueDate.includes('T18:30:00'),
-              includes_plus_00_00: typeof invoice.dueDate === 'string' && invoice.dueDate.includes('+00:00'),
-              exact_pattern: typeof invoice.dueDate === 'string' && invoice.dueDate.includes('T18:30:00+00:00')
-            });
-            
-            // Broader check for any date with T18:30:00 UTC time pattern (likely means next day in India)
-            if (typeof invoice.dueDate === 'string' && 
-                (invoice.dueDate.includes('T18:30:00+00:00') || 
-                 (invoice.dueDate.includes('T18:30:00') && invoice.dueDate.includes('+00:00')))) {
-              console.log("✅ Detected special case for Indian next-day due date");
-              const dateParts = invoice.dueDate.split('T')[0].split('-');
-              if (dateParts.length === 3) {
-                const year = parseInt(dateParts[0]);
-                const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
-                const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
-                
-                const localDate = new Date(year, month, day);
-                console.log("✅ Successfully converted to local Indian due date:", localDate, "showing as", format(localDate, "PPP"));
-                return localDate;
-              }
+            // TARGETED APPROACH FOR 18:30 UTC FORMAT
+            if (typeof invoice.dueDate === 'string' && invoice.dueDate.includes('T18:30:00')) {
+              console.log("🔧 HARDCODED FIX - Detected 18:30 UTC timestamp for dueDate");
+              
+              // Extract just the date part (YYYY-MM-DD) and add one day
+              const datePart = invoice.dueDate.split('T')[0]; // "2025-05-06"
+              
+              // Get tomorrow's date (since 18:30 UTC = next day in India)
+              const [year, month, day] = datePart.split('-').map(num => parseInt(num));
+              
+              // Create date with day+1 (next day in India) - months are 0-indexed in JS
+              const fixedDate = new Date(year, month-1, day+1, 12, 0, 0);
+              
+              console.log("🔧 HARDCODED FIX - Created fixed dueDate:", fixedDate, 
+                "from parts:", {year, month, day: day+1});
+              
+              return fixedDate;
             }
             
             // First attempt: Parse as ISO string with date-fns
