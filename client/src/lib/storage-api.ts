@@ -14,9 +14,9 @@ export async function listBuckets(): Promise<any[]> {
       throw new Error(`Failed to list buckets: ${response.statusText}`);
     }
     return await response.json();
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error listing buckets:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -34,61 +34,52 @@ export async function listFiles(bucket: string, path: string = ''): Promise<any[
       throw new Error(`Failed to list files: ${response.statusText}`);
     }
     return await response.json();
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error listing files:', error);
-    return [];
+    throw error;
   }
 }
 
 /**
- * Get the public URL for a file
+ * Get public URL for a file
  * @param {string} bucket - The bucket name
- * @param {string} filePath - The path to the file
- * @returns {Promise<string>} The public URL
+ * @param {string} filePath - Path to the file
+ * @returns {Promise<Object>} Object with publicUrl property
  */
-export async function getPublicUrl(bucket: string, filePath: string): Promise<string> {
+export async function getPublicUrl(bucket: string, filePath: string): Promise<{ publicUrl: string }> {
   try {
     const url = `/api/storage/public-url/${bucket}/${encodeURIComponent(filePath)}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to get public URL: ${response.statusText}`);
     }
-    const data = await response.json();
-    return data.publicUrl;
-  } catch (error) {
+    return await response.json();
+  } catch (error: any) {
     console.error('Error getting public URL:', error);
-    return '';
+    throw error;
   }
 }
 
 /**
  * Upload a file to a bucket
  * @param {string} bucket - The bucket name
- * @param {File} file - The file object from input[type=file]
- * @param {string} path - Optional path prefix
- * @returns {Promise<Object>} Object with path and publicUrl
+ * @param {FormData} formData - FormData object containing the file to upload
+ * @returns {Promise<Object>} Upload result with path and url
  */
-export async function uploadFile(bucket: string, file: File, path: string = ''): Promise<{path: string; url: string}> {
+export async function uploadFile(bucket: string, formData: FormData): Promise<{ path: string, url: string }> {
   try {
-    // Create a FormData object to send the file
-    const formData = new FormData();
-    formData.append('file', file);
-    if (path) {
-      formData.append('path', path);
-    }
-    
-    // Send the request to our server API
     const response = await fetch(`/api/storage/upload/${bucket}`, {
       method: 'POST',
-      body: formData,
+      body: formData
     });
     
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
     }
     
     return await response.json();
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading file:', error);
     throw error;
   }
@@ -97,31 +88,24 @@ export async function uploadFile(bucket: string, file: File, path: string = ''):
 /**
  * Delete a file from a bucket
  * @param {string} bucket - The bucket name
- * @param {string} filePath - The path to the file
- * @returns {Promise<boolean>} True if the file was deleted
+ * @param {string} filePath - Path to the file
+ * @returns {Promise<Object>} Delete result
  */
-export async function deleteFile(bucket: string, filePath: string): Promise<boolean> {
+export async function deleteFile(bucket: string, filePath: string): Promise<{ success: boolean }> {
   try {
-    const response = await fetch(`/api/storage/delete/${bucket}/${encodeURIComponent(filePath)}`, {
-      method: 'DELETE',
+    const url = `/api/storage/delete/${bucket}/${encodeURIComponent(filePath)}`;
+    const response = await fetch(url, {
+      method: 'DELETE'
     });
     
     if (!response.ok) {
-      throw new Error(`Delete failed: ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Delete failed: ${response.statusText}`);
     }
     
-    return true;
-  } catch (error) {
+    return await response.json();
+  } catch (error: any) {
     console.error('Error deleting file:', error);
-    return false;
+    throw error;
   }
 }
-
-// Export all functions as a single object for convenience
-export const StorageAPI = {
-  listBuckets,
-  listFiles,
-  getPublicUrl,
-  uploadFile,
-  deleteFile,
-};

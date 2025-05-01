@@ -1,16 +1,24 @@
-import { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { uploadFile, listFiles, deleteFile, getPublicUrl, listBuckets } from '@/lib/storage-api';
+import { Badge } from '@/components/ui/badge';
+import { listBuckets, listFiles, getPublicUrl, uploadFile, deleteFile } from '@/lib/storage-api';
 import { STORAGE_BUCKETS } from '@/lib/supabase';
-import { Loader2, Upload, FileText, Trash2, RefreshCw } from 'lucide-react';
+import { Upload, RefreshCw, Folder, FileText, Trash2, X, AlertCircle, ExternalLink } from 'lucide-react';
 
 interface FileObject {
   name: string;
   id: string;
-  path: string;
-  url?: string;
+  metadata?: any;
+  created_at?: string;
+  updated_at?: string;
+  last_accessed_at?: string;
+  size?: number;
 }
 
 export function StorageApiTest() {
@@ -39,25 +47,14 @@ export function StorageApiTest() {
 
   // List files in the selected bucket
   const handleListFiles = useCallback(async () => {
+    if (!selectedBucket) return;
+    
     setIsLoading(true);
     setError(null);
     
     try {
       const fileList = await listFiles(selectedBucket);
-      
-      // Enhance the list with URLs
-      const enhancedFiles = await Promise.all(
-        fileList.map(async (file) => {
-          try {
-            const url = await getPublicUrl(selectedBucket, file.name);
-            return { ...file, url };
-          } catch {
-            return file;
-          }
-        })
-      );
-      
-      setFiles(enhancedFiles);
+      setFiles(fileList);
     } catch (err: any) {
       setError(`Failed to list files: ${err.message}`);
     } finally {
@@ -65,222 +62,289 @@ export function StorageApiTest() {
     }
   }, [selectedBucket]);
 
-  // Handle file upload
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  // Upload a file to the selected bucket
+  const handleUploadFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedBucket) return;
     
-    const file = files[0];
     setIsLoading(true);
     setError(null);
     setUploadedFileUrl(null);
     
     try {
-      // Upload the file to the selected bucket with a test prefix
-      const result = await uploadFile(selectedBucket, file, 'test');
-      setUploadedFileUrl(result.url);
+      const formData = new FormData();
+      formData.append('file', file);
       
-      // Refresh the file list
-      await handleListFiles();
+      const result = await uploadFile(selectedBucket, formData);
+      
+      if (result?.url) {
+        setUploadedFileUrl(result.url);
+        await handleListFiles(); // Refresh file list
+      }
     } catch (err: any) {
-      setError(`Upload failed: ${err.message}`);
+      setError(`Failed to upload file: ${err.message}`);
     } finally {
       setIsLoading(false);
-      // Reset the input
+      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   }, [selectedBucket, handleListFiles]);
 
-  // Handle file deletion
-  const handleDeleteFile = useCallback(async (filePath: string) => {
+  // Delete a file from the bucket
+  const handleDeleteFile = useCallback(async (fileName: string) => {
+    if (!selectedBucket) return;
+    
     setIsLoading(true);
     setError(null);
     
     try {
-      const success = await deleteFile(selectedBucket, filePath);
-      if (success) {
-        // Refresh the file list
-        await handleListFiles();
-      } else {
-        setError('Delete operation failed');
-      }
+      await deleteFile(selectedBucket, fileName);
+      await handleListFiles(); // Refresh file list
     } catch (err: any) {
-      setError(`Delete failed: ${err.message}`);
+      setError(`Failed to delete file: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
   }, [selectedBucket, handleListFiles]);
 
+  // Get public URL for a file
+  const handleGetPublicUrl = useCallback(async (fileName: string) => {
+    if (!selectedBucket) return;
+    
+    try {
+      const { publicUrl } = await getPublicUrl(selectedBucket, fileName);
+      window.open(publicUrl, '_blank');
+    } catch (err: any) {
+      setError(`Failed to get public URL: ${err.message}`);
+    }
+  }, [selectedBucket]);
+
+  // Load buckets on component mount
+  useEffect(() => {
+    handleListBuckets();
+  }, [handleListBuckets]);
+
   return (
-    <Card className="max-w-3xl mx-auto">
-      <CardHeader>
-        <CardTitle>Supabase Storage API Test</CardTitle>
-        <CardDescription>
-          Test the server-side API proxy for Supabase Storage
-        </CardDescription>
-      </CardHeader>
+    <div className="space-y-6">
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1"
+            onClick={() => setError(null)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </Alert>
+      )}
       
-      <CardContent className="space-y-4">
-        {error && (
-          <div className="bg-destructive/10 text-destructive p-3 rounded-md">
-            {error}
-          </div>
-        )}
+      <Tabs defaultValue="buckets">
+        <TabsList>
+          <TabsTrigger value="buckets">Buckets</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="upload">Upload</TabsTrigger>
+        </TabsList>
         
-        {/* Bucket selection */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Storage Buckets</h3>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleListBuckets}
-              disabled={isLoading}
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              List Buckets
-            </Button>
-            
-            <select 
-              className="border rounded px-2 py-1 flex-1"
-              value={selectedBucket}
-              onChange={(e) => setSelectedBucket(e.target.value)}
-              disabled={isLoading}
-            >
-              {buckets.length > 0 ? (
-                buckets.map(bucket => (
-                  <option key={bucket} value={bucket}>{bucket}</option>
-                ))
-              ) : (
-                <option value={selectedBucket}>{selectedBucket}</option>
-              )}
-            </select>
-          </div>
-        </div>
-        
-        <Separator />
-        
-        {/* File upload */}
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Upload Test</h3>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-              Select File
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              className="hidden"
-              disabled={isLoading}
-            />
-          </div>
-          
-          {uploadedFileUrl && (
-            <div className="mt-2">
-              <p className="text-xs text-gray-500 mb-1">Uploaded File:</p>
-              <div className="bg-secondary/20 p-2 rounded text-xs break-all">
-                <a href={uploadedFileUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                  {uploadedFileUrl}
-                </a>
+        <TabsContent value="buckets" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Storage Buckets</CardTitle>
+              <CardDescription>List available storage buckets</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between mb-4">
+                <Button 
+                  onClick={handleListBuckets}
+                  disabled={isLoading}
+                  className="mr-2"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh Buckets
+                </Button>
               </div>
-              {uploadedFileUrl.toLowerCase().endsWith('.jpg') || 
-               uploadedFileUrl.toLowerCase().endsWith('.jpeg') || 
-               uploadedFileUrl.toLowerCase().endsWith('.png') || 
-               uploadedFileUrl.toLowerCase().endsWith('.gif') || 
-               uploadedFileUrl.toLowerCase().endsWith('.webp') ? (
-                <div className="mt-2">
-                  <img 
-                    src={uploadedFileUrl} 
-                    alt="Uploaded preview" 
-                    className="max-h-32 max-w-full rounded border" 
-                  />
+              
+              {buckets.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {buckets.map((bucket) => (
+                    <Card key={bucket} className="flex items-center p-4">
+                      <Folder className="h-5 w-5 mr-2 text-primary" />
+                      <span className="flex-1">{bucket}</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setSelectedBucket(bucket);
+                          handleListFiles();
+                        }}
+                      >
+                        Browse
+                      </Button>
+                    </Card>
+                  ))}
                 </div>
-              ) : null}
-            </div>
-          )}
-        </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  {isLoading ? 'Loading buckets...' : 'No buckets found'}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
         
-        <Separator />
-        
-        {/* File listing */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium">Files in Bucket</h3>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleListFiles}
-              disabled={isLoading}
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              Refresh
-            </Button>
-          </div>
-          
-          <div className="border rounded-md overflow-hidden">
-            {files.length > 0 ? (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-secondary/20">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">File</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Path</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {files.map((file) => (
-                    <tr key={file.id || file.path}>
-                      <td className="px-4 py-2 text-sm">
+        <TabsContent value="files" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Files in {selectedBucket}</CardTitle>
+              <CardDescription>Browse and manage files in the selected bucket</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between mb-4">
+                <Button 
+                  onClick={handleListFiles}
+                  disabled={isLoading || !selectedBucket}
+                  className="mr-2"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Refresh Files
+                </Button>
+              </div>
+              
+              {selectedBucket ? (
+                files.length > 0 ? (
+                  <div className="space-y-2">
+                    {files.map((file) => (
+                      <div key={file.id} className="flex items-center justify-between p-3 border rounded-md">
                         <div className="flex items-center">
-                          <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
-                          <span className="truncate max-w-[150px]">{file.name}</span>
+                          <FileText className="h-5 w-5 mr-2 text-primary" />
+                          <div>
+                            <div className="font-medium">{file.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {file.size ? `${Math.round(file.size / 1024)} KB` : 'Size unknown'}
+                            </div>
+                          </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-2 text-sm">
-                        <span className="truncate max-w-[200px] block">{file.path}</span>
-                      </td>
-                      <td className="px-4 py-2 text-sm text-right">
-                        <div className="flex justify-end gap-2">
-                          {file.url && (
-                            <a 
-                              href={file.url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              View
-                            </a>
-                          )}
-                          <button
-                            onClick={() => handleDeleteFile(file.path)}
-                            className="text-destructive hover:text-destructive/80"
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleGetPublicUrl(file.name)}
+                          >
+                            <ExternalLink className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          <Button 
+                            variant="destructive" 
+                            size="sm"
+                            onClick={() => handleDeleteFile(file.name)}
                             disabled={isLoading}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="p-4 text-center text-sm text-gray-500">
-                No files found in this bucket. Upload a file to see it here.
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    {isLoading ? 'Loading files...' : 'No files found in this bucket'}
+                  </div>
+                )
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  Please select a bucket first
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="upload" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload File</CardTitle>
+              <CardDescription>Upload a new file to the selected bucket</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="bucket-select">Selected Bucket</Label>
+                  <div className="mt-1">
+                    <Badge variant="outline" className="text-base py-2 px-4">
+                      <Folder className="h-4 w-4 mr-2" />
+                      {selectedBucket || 'No bucket selected'}
+                    </Badge>
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                <div>
+                  <Label htmlFor="file-upload">Choose File</Label>
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleUploadFile}
+                    disabled={isLoading || !selectedBucket}
+                    className="mt-1"
+                  />
+                </div>
+                
+                {uploadedFileUrl && (
+                  <div className="mt-4">
+                    <Label>Uploaded File URL</Label>
+                    <div className="flex items-center mt-1">
+                      <Input
+                        value={uploadedFileUrl}
+                        readOnly
+                        className="flex-1 mr-2"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(uploadedFileUrl, '_blank')}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-1" />
+                        Open
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button variant="outline" onClick={() => setUploadedFileUrl(null)} disabled={!uploadedFileUrl}>
+                Reset
+              </Button>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || !selectedBucket}
+              >
+                {isLoading ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Upload File
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
