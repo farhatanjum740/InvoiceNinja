@@ -117,8 +117,15 @@ export function ImageUploadSupabase({
         }
       }
       
+      // Create FormData for the upload
+      const formData = new FormData();
+      formData.append('file', compressedFile);
+      if (path) {
+        formData.append('path', path);
+      }
+      
       // Upload to Supabase via our server API
-      const result = await apiUploadFile(STORAGE_BUCKETS.COMPANY_LOGOS, compressedFile, path);
+      const result = await apiUploadFile(STORAGE_BUCKETS.COMPANY_LOGOS, formData);
       const fileUrl = result?.url;
       
       if (fileUrl) {

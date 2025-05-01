@@ -120,7 +120,8 @@ export async function uploadFile(
 // Utility for deleting files - now using the server API instead of direct Supabase calls
 export async function deleteFile(bucket: string, path: string): Promise<boolean> {
   try {
-    return await apiDeleteFile(bucket, path);
+    const result = await apiDeleteFile(bucket, path);
+    return result.success;
   } catch (error) {
     console.error("Error in deleteFile:", error);
     return false;

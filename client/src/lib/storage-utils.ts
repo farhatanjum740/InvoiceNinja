@@ -7,9 +7,10 @@
  * Handles both signed and public URLs
  * 
  * @param {string} url - The full Supabase storage URL
+ * @param {string} bucketName - Optional bucket name for validation
  * @returns {string} The file path relative to the bucket
  */
-export function getPathFromUrl(url: string): string {
+export function getPathFromUrl(url: string, bucketName?: string): string {
   if (!url) return '';
   
   try {
@@ -35,6 +36,11 @@ export function getPathFromUrl(url: string): string {
     if (bucketIndex === -1 || bucketIndex + 2 >= parts.length) {
       console.warn('Could not parse bucket from URL:', url);
       return '';
+    }
+    
+    // Validate bucket name if provided
+    if (bucketName && parts[bucketIndex + 1] !== bucketName) {
+      console.warn(`URL bucket ${parts[bucketIndex + 1]} doesn't match expected bucket ${bucketName}`);
     }
     
     // Get everything after the bucket name

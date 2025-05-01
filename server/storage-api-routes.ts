@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { supabase } from './supabase-client';
+import { supabase } from './db';
 import multer from 'multer';
 import path from 'path';
 
