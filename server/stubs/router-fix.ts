@@ -14,11 +14,7 @@ export function createRouterFixMiddleware(app: express.Express) {
     '/company',
     '/reports',
     '/auth',
-    '/supabase-test',
-    '/supabase-test-fixed',
-    '/supabase-test-original-fixed',
-    '/storage-test',
-    '/test'
+    '/settings'
   ];
 
   // Add middleware to handle client routes
