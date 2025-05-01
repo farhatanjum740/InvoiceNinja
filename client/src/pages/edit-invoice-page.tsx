@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { isValid, parseISO } from "date-fns";
+import { isValid, parseISO, format } from "date-fns";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -71,10 +71,22 @@ export default function EditInvoicePage() {
             // Log the original date for debugging
             console.log("Original invoiceDate from Supabase:", invoice.invoiceDate);
             
-            // DIRECT FIX: Check if this is the specific format "2025-05-01T18:30:00+00:00"
-            // This is a special case for the invoice with May 2nd (in Indian time) but stored as May 1st UTC evening
-            if (typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('T18:30:00+00:00')) {
-              console.log("Detected special case for May 2nd invoice");
+            // DIRECT FIX: Check if this is the specific format with 18:30:00 UTC time (India's next day)
+            // This is a special case for the invoice with 18:30 UTC (midnight India time)
+            // Added extra debug log statements
+            console.log("🔍 DETAILED DEBUG - invoice.invoiceDate value:", invoice.invoiceDate);
+            console.log("🔍 DETAILED DEBUG - invoice.invoiceDate type:", typeof invoice.invoiceDate);
+            console.log("🔍 DETAILED DEBUG - String tests:", {
+              includes_T18_30: typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('T18:30:00'),
+              includes_plus_00_00: typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('+00:00'),
+              exact_pattern: typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('T18:30:00+00:00')
+            });
+            
+            // Broader check for any date with T18:30:00 UTC time pattern (likely means next day in India)
+            if (typeof invoice.invoiceDate === 'string' && 
+                (invoice.invoiceDate.includes('T18:30:00+00:00') || 
+                 (invoice.invoiceDate.includes('T18:30:00') && invoice.invoiceDate.includes('+00:00')))) {
+              console.log("✅ Detected special case for Indian next-day invoice");
               const dateParts = invoice.invoiceDate.split('T')[0].split('-');
               if (dateParts.length === 3) {
                 const year = parseInt(dateParts[0]);
@@ -82,7 +94,7 @@ export default function EditInvoicePage() {
                 const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
                 
                 const localDate = new Date(year, month, day);
-                console.log("Converted to local Indian date:", localDate);
+                console.log("✅ Successfully converted to local Indian date:", localDate, "showing as", format(localDate, "PPP"));
                 return localDate;
               }
             }
@@ -125,10 +137,22 @@ export default function EditInvoicePage() {
             // Log the original date for debugging
             console.log("Original dueDate from Supabase:", invoice.dueDate);
             
-            // DIRECT FIX: Check if this is the specific format "2025-05-06T18:30:00+00:00"
-            // Handles the same pattern as invoice date
-            if (typeof invoice.dueDate === 'string' && invoice.dueDate.includes('T18:30:00+00:00')) {
-              console.log("Detected special case for due date");
+            // DIRECT FIX: Check if this is the specific format with 18:30:00 UTC time (India's next day)
+            // This is a special case for due dates with 18:30 UTC (midnight India time)
+            // Added extra debug log statements
+            console.log("🔍 DETAILED DEBUG - invoice.dueDate value:", invoice.dueDate);
+            console.log("🔍 DETAILED DEBUG - invoice.dueDate type:", typeof invoice.dueDate);
+            console.log("🔍 DETAILED DEBUG - Due Date String tests:", {
+              includes_T18_30: typeof invoice.dueDate === 'string' && invoice.dueDate.includes('T18:30:00'),
+              includes_plus_00_00: typeof invoice.dueDate === 'string' && invoice.dueDate.includes('+00:00'),
+              exact_pattern: typeof invoice.dueDate === 'string' && invoice.dueDate.includes('T18:30:00+00:00')
+            });
+            
+            // Broader check for any date with T18:30:00 UTC time pattern (likely means next day in India)
+            if (typeof invoice.dueDate === 'string' && 
+                (invoice.dueDate.includes('T18:30:00+00:00') || 
+                 (invoice.dueDate.includes('T18:30:00') && invoice.dueDate.includes('+00:00')))) {
+              console.log("✅ Detected special case for Indian next-day due date");
               const dateParts = invoice.dueDate.split('T')[0].split('-');
               if (dateParts.length === 3) {
                 const year = parseInt(dateParts[0]);
@@ -136,7 +160,7 @@ export default function EditInvoicePage() {
                 const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
                 
                 const localDate = new Date(year, month, day);
-                console.log("Converted to local Indian date for due date:", localDate);
+                console.log("✅ Successfully converted to local Indian due date:", localDate, "showing as", format(localDate, "PPP"));
                 return localDate;
               }
             }
