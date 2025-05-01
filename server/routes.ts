@@ -599,6 +599,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update an invoice and its items completely
+  app.put("/api/invoices/:id", async (req: Request, res: Response) => {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const { invoice, items } = req.body;
+      
+      console.log(`Attempting to update invoice #${invoiceId} with ${items?.length || 0} items`);
+      
+      // Validate that we have items
+      if (!items || items.length === 0) {
+        return res.status(400).json({ error: "No invoice items provided" });
+      }
+      
+      // Check if invoice belongs to user
+      const existingInvoice = await storage.getInvoice(invoiceId);
+      
+      if (!existingInvoice || existingInvoice.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden: You do not have permission to update this invoice" });
+      }
+      
+      // PREVALIDATION: Check if all product IDs exist in the database
+      const productIds = items
+        .map((item: any) => item.productId)
+        .filter((id: any) => id !== null && id !== undefined);
+      
+      if (productIds.length > 0) {
+        console.log("Prevalidating product IDs for update:", productIds);
+        
+        try {
+          const { data, error } = await supabase
+            .from('products')
+            .select('id')
+            .in('id', productIds);
+          
+          if (error) {
+            console.error("Error checking product existence:", error);
+          } else if (data) {
+            const existingProductIds = data.map((product: any) => product.id);
+            const missingProductIds = productIds.filter((id: any) => !existingProductIds.includes(id));
+            
+            if (missingProductIds.length > 0) {
+              console.warn(`Products with IDs ${missingProductIds.join(', ')} do not exist, will set to null`);
+              
+              // Set non-existent product IDs to null to avoid foreign key constraint errors
+              const updatedItems = items.map((item: any) => {
+                if (item.productId && missingProductIds.includes(item.productId)) {
+                  console.log(`Setting product_id ${item.productId} to null for item "${item.description}"`);
+                  return { ...item, productId: null };
+                }
+                return item;
+              });
+              
+              // Replace items with updated version
+              req.body.items = updatedItems;
+            }
+          }
+        } catch (productCheckError) {
+          console.error("Error during product validation:", productCheckError);
+          // Continue with update, letting storage layer handle any errors
+        }
+      }
+      
+      // Update the invoice
+      try {
+        // First, delete all existing invoice items
+        await storage.deleteInvoiceItems(invoiceId);
+        
+        // Update the invoice
+        const invoiceWithUserId = {
+          ...invoice,
+          userId: req.user.id,
+          id: invoiceId
+        };
+        
+        // Update the invoice details
+        await storage.updateInvoice(invoiceId, invoiceWithUserId);
+        
+        // Add new invoice items
+        for (const item of items) {
+          await storage.addInvoiceItem({
+            ...item,
+            invoiceId: invoiceId
+          });
+        }
+        
+        // Fetch the updated invoice with items
+        const updatedInvoice = await storage.getInvoiceWithItems(invoiceId);
+        
+        console.log("Invoice updated successfully with ID:", invoiceId);
+        return res.status(200).json(updatedInvoice);
+      } catch (updateError: any) {
+        // More detailed error reporting for invoice update failures
+        console.error("Invoice update failed:", updateError.message || updateError);
+        
+        return res.status(500).json({ 
+          error: "Invoice update failed", 
+          message: updateError.message || "Unknown error"
+        });
+      }
+    } catch (error: any) {
+      console.error("Error processing invoice update request:", error);
+      return res.status(500).json({ 
+        error: "Server error", 
+        message: error.message || "Unknown error"
+      });
+    }
+  });
+
   app.delete("/api/invoices/:id", async (req: Request, res: Response) => {
     if (!req.user?.id) {
       return res.status(401).json({ error: "Unauthorized" });

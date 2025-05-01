@@ -50,6 +50,7 @@ export interface IStorage {
   addInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem>;
   updateInvoiceItem(id: number, item: Partial<InsertInvoiceItem>): Promise<InvoiceItem | undefined>;
   deleteInvoiceItem(id: number): Promise<boolean>;
+  deleteInvoiceItems(invoiceId: number): Promise<boolean>;
   
   // Analytics
   getInvoiceStats(userId: number): Promise<{
@@ -1227,6 +1228,27 @@ export class SupabaseStorage implements IStorage {
       return true;
     } catch (error) {
       console.error("Error in deleteInvoiceItem:", error);
+      return false;
+    }
+  }
+  
+  async deleteInvoiceItems(invoiceId: number): Promise<boolean> {
+    try {
+      console.log(`Deleting all items for invoice #${invoiceId}`);
+      const { error } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', invoiceId);
+      
+      if (error) {
+        console.error("Error deleting invoice items:", error);
+        return false;
+      }
+      
+      console.log(`Successfully deleted all items for invoice #${invoiceId}`);
+      return true;
+    } catch (error) {
+      console.error("Error in deleteInvoiceItems:", error);
       return false;
     }
   }
