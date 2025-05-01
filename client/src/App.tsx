@@ -66,6 +66,7 @@ function AppRoutes() {
       <ProtectedRoute path="/products" component={ProductsPage} />
       <ProtectedRoute path="/company" component={CompanyPage} />
       <ProtectedRoute path="/reports" component={ReportsPage} />
+      <ProtectedRoute path="/settings" component={CompanyPage} />
       
       {/* Fallback 404 page */}
       <Route component={NotFound} />
