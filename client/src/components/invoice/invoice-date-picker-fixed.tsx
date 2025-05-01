@@ -104,7 +104,7 @@ interface DatePickerProps {
   isRequired?: boolean;
 }
 
-export function InvoiceDatePicker({ field, label, isRequired = false }: DatePickerProps) {
+export function InvoiceDatePickerFixed({ field, label, isRequired = false }: DatePickerProps) {
   // DIRECT DEBUG: Log all field values to diagnose date issues
   console.log("⚠️ DATEPICKER RAW FIELD VALUE:", field.value, "Type:", typeof field.value);
   

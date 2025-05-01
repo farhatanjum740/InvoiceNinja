@@ -19,7 +19,8 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { InvoiceDatePicker } from "./invoice-date-picker";
+// Import the fixed date picker that properly handles 18:30:00 UTC format
+import { InvoiceDatePickerFixed } from "./invoice-date-picker-fixed";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, Loader2, PlusIcon, Trash2Icon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -642,7 +643,7 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
                           <FormLabel>Invoice Date <span className="text-red-500">*</span></FormLabel>
-                          <InvoiceDatePicker field={field} />
+                          <InvoiceDatePickerFixed field={field} />
                           <FormMessage />
                         </FormItem>
                       )}
@@ -654,7 +655,7 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
                           <FormLabel>Due Date</FormLabel>
-                          <InvoiceDatePicker field={field} />
+                          <InvoiceDatePickerFixed field={field} />
                           <FormMessage />
                         </FormItem>
                       )}
