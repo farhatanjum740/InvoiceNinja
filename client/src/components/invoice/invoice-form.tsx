@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 
 // Define schema for invoice form
 const invoiceFormSchema = z.object({
+  id: z.number().optional(), // Used when editing existing invoices
   invoiceNumber: z.string().min(1, "Invoice number is required"),
   customerId: z.number().min(1, "Customer is required"),
   invoiceDate: z.date(),
@@ -202,7 +203,7 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
   // Create invoice mutation
   const createInvoiceMutation = useMutation({
     mutationFn: async (data: any) => {
-      console.log("Submitting invoice data:", data);
+      console.log("Submitting new invoice data:", data);
       const response = await apiRequest("POST", "/api/invoices", data);
       const result = await response.json();
       console.log("Response from server:", result);
@@ -223,6 +224,33 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
       toast({
         title: "Error",
         description: error.message || "Failed to create invoice. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Update invoice mutation
+  const updateInvoiceMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const invoiceId = form.getValues().id;
+      console.log(`Updating invoice #${invoiceId}:`, data);
+      const response = await apiRequest("PUT", `/api/invoices/${invoiceId}`, data);
+      const result = await response.json();
+      console.log("Response from server:", result);
+      return result;
+    },
+    onSuccess: (data) => {
+      console.log("Invoice updated successfully:", data);
+      // We'll let the parent component handle the success toast and navigation
+      if (onSuccess) {
+        onSuccess();
+      }
+    },
+    onError: (error) => {
+      console.error("Error updating invoice:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update invoice. Please try again.",
         variant: "destructive",
       });
     },
@@ -479,7 +507,13 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
       }))
     };
 
-    createInvoiceMutation.mutate(invoiceData);
+    if (isEditing) {
+      // If editing an existing invoice, update it
+      updateInvoiceMutation.mutate(invoiceData);
+    } else {
+      // Otherwise create a new invoice
+      createInvoiceMutation.mutate(invoiceData);
+    }
   };
 
   // Format currency
@@ -932,15 +966,26 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
             </Button>
             <Button
               type="submit"
-              disabled={createInvoiceMutation.isPending}
+              disabled={isEditing ? updateInvoiceMutation.isPending : createInvoiceMutation.isPending}
             >
-              {createInvoiceMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
-                </>
+              {isEditing ? (
+                updateInvoiceMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Invoice"
+                )
               ) : (
-                "Create Invoice"
+                createInvoiceMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Invoice"
+                )
               )}
             </Button>
           </div>
