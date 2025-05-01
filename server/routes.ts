@@ -36,6 +36,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register Supabase API routes
   app.use('/api/supabase', supabaseApiRoutes);
+  
+  // Direct route for Supabase test page
+  app.get('/direct-supabase-test', (req, res) => {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Supabase API Test</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-gray-100">
+        <div class="container mx-auto p-4">
+          <h1 class="text-2xl font-bold mb-6">Supabase API Direct Test</h1>
+          <p class="mb-4">This is a direct server-rendered test page for Supabase API.</p>
+          
+          <div class="bg-white p-4 rounded shadow mb-4">
+            <h2 class="text-xl font-semibold mb-2">Test Select Operation</h2>
+            <form id="selectForm" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium mb-1">Table Name</label>
+                <input type="text" id="selectTable" value="products" class="w-full p-2 border rounded" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Columns</label>
+                <input type="text" id="selectColumns" value="*" class="w-full p-2 border rounded" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1">Filters (JSON)</label>
+                <textarea id="selectFilters" rows="5" class="w-full p-2 border rounded">[]</textarea>
+              </div>
+              <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Test Select</button>
+            </form>
+          </div>
+          
+          <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-xl font-semibold mb-2">Results</h2>
+            <pre id="results" class="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-80">No results yet. Run a test to see data.</pre>
+          </div>
+        </div>
+        
+        <script>
+          document.getElementById('selectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const table = document.getElementById('selectTable').value;
+            const columns = document.getElementById('selectColumns').value;
+            const filtersStr = document.getElementById('selectFilters').value;
+            
+            try {
+              const filters = JSON.parse(filtersStr);
+              const resultsEl = document.getElementById('results');
+              resultsEl.textContent = 'Loading...';
+              
+              const response = await fetch('/api/supabase/select', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  table,
+                  columns,
+                  filters,
+                }),
+              });
+              
+              const data = await response.json();
+              resultsEl.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+              document.getElementById('results').textContent = 'Error: ' + err.message;
+            }
+          });
+        </script>
+      </body>
+      </html>
+    `);
+  });
 
   // Company endpoints
   app.get("/api/company", async (req: Request, res: Response) => {
