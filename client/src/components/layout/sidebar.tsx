@@ -59,6 +59,11 @@ export function Sidebar({ className }: SidebarProps) {
       href: "/storage-test",
       icon: Database,
     },
+    {
+      title: "Supabase Test",
+      href: "/supabase-test",
+      icon: Database,
+    },
   ];
 
   const isActive = (path: string) => {
