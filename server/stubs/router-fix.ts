@@ -9,6 +9,8 @@ export function createRouterFixMiddleware(app: express.Express) {
   const clientRoutes = [
     '/dashboard',
     '/invoices',
+    '/invoices/create',
+    '/invoices/edit', // Base path for invoice editing
     '/customers',
     '/products',
     '/company',
@@ -16,6 +18,18 @@ export function createRouterFixMiddleware(app: express.Express) {
     '/auth',
     '/settings'
   ];
+  
+  // Special handling for dynamic routes with parameters
+  app.get('/invoices/edit/:id', (req, res, next) => {
+    // In development, let Vite handle it
+    if (process.env.NODE_ENV === 'development') {
+      return next();
+    }
+    
+    // In production, serve the index.html file
+    const distPath = path.resolve(process.cwd(), 'dist', 'public');
+    res.sendFile(path.resolve(distPath, 'index.html'));
+  });
 
   // Add middleware to handle client routes
   clientRoutes.forEach(route => {
