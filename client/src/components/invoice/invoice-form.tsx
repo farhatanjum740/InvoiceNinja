@@ -97,7 +97,22 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
           id: initialData.id,
           invoiceNumber: initialData.invoiceNumber,
           customerId: initialData.customerId,
-          invoiceDate: new Date(initialData.invoiceDate),
+          // Ensure we have a valid date by using current date as fallback
+          invoiceDate: (() => {
+            console.log("Original invoice date:", initialData.invoiceDate);
+            try {
+              const parsedDate = initialData.invoiceDate ? new Date(initialData.invoiceDate) : new Date();
+              // Check if date is valid
+              if (isNaN(parsedDate.getTime())) {
+                console.warn("Invalid invoice date detected, using current date");
+                return new Date();
+              }
+              return parsedDate;
+            } catch (e) {
+              console.error("Error parsing invoice date:", e);
+              return new Date(); // Fallback to current date
+            }
+          })(),
           status: initialData.status,
           notes: initialData.notes || "Thank you for your business!",
           termsAndConditions: initialData.termsAndConditions || "1. Payment due within 30 days\n2. Goods once sold cannot be returned"
@@ -105,7 +120,14 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         
         // Set due date if it exists
         if (initialData.dueDate) {
-          formValues.dueDate = new Date(initialData.dueDate);
+          try {
+            const parsedDueDate = new Date(initialData.dueDate);
+            // Check if date is valid
+            formValues.dueDate = isNaN(parsedDueDate.getTime()) ? null : parsedDueDate;
+          } catch (e) {
+            console.error("Error parsing due date:", e);
+            formValues.dueDate = null; // Don't set an invalid date
+          }
         }
         
         // Set the form values

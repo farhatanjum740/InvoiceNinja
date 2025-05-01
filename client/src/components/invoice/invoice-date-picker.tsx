@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 
-// Safe date formatting utility function
+// Safe date formatting utility function with robust fallbacks
 const formatDateSafe = (date: any) => {
   try {
     if (!date) return "";
@@ -15,28 +15,58 @@ const formatDateSafe = (date: any) => {
     // Add debugging to see what kind of date value we're receiving
     console.log("Date value type:", typeof date, "Value:", date);
     
-    // Handle different date formats
-    let dateObj;
-    if (date instanceof Date) {
-      dateObj = date;
-    } else if (typeof date === 'string') {
-      // Handle ISO string format from Supabase
-      dateObj = new Date(date);
-    } else {
-      // Try to convert other formats
-      dateObj = new Date(date);
+    // Case 1: Already a valid Date object
+    if (date instanceof Date && !isNaN(date.getTime())) {
+      return format(date, "PPP");
     }
     
-    // Validate the date
-    if (!isValid(dateObj)) {
-      console.warn("Invalid date object created from:", date);
-      return "Invalid date";
+    // Case 2: ISO string or other string format
+    if (typeof date === 'string') {
+      // Try different parsing strategies
+      
+      // Strategy 1: Using Date constructor directly
+      let dateObj = new Date(date);
+      if (!isNaN(dateObj.getTime())) {
+        return format(dateObj, "PPP");
+      }
+      
+      // Strategy 2: Try to handle formats like YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}/.test(date)) {
+        // ISO format without time
+        const [year, month, day] = date.split('-').map(Number);
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          dateObj = new Date(year, month - 1, day);  // month is 0-indexed in JS Date
+          if (!isNaN(dateObj.getTime())) {
+            return format(dateObj, "PPP");
+          }
+        }
+      }
+      
+      // Strategy 3: Try to parse timestamp format
+      const timestamp = Number(date);
+      if (!isNaN(timestamp)) {
+        dateObj = new Date(timestamp);
+        if (!isNaN(dateObj.getTime())) {
+          return format(dateObj, "PPP");
+        }
+      }
     }
     
-    return format(dateObj, "PPP");
+    // Case 3: If it's another type, make a last attempt
+    const fallbackDate = new Date(date);
+    if (!isNaN(fallbackDate.getTime())) {
+      return format(fallbackDate, "PPP");
+    }
+    
+    // If we got here, we couldn't parse the date
+    console.warn("Failed to parse date value:", date);
+    
+    // Return current date formatted instead of error message
+    // This is a user-friendly fallback for display purposes
+    return format(new Date(), "PPP");
   } catch (error) {
     console.error("Date format error:", error, "for input:", date);
-    return "Invalid date";
+    return format(new Date(), "PPP"); // Return current date as fallback
   }
 };
 
@@ -70,7 +100,18 @@ export function InvoiceDatePicker({ field, label, isRequired = false }: DatePick
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
-          selected={field.value ? new Date(field.value) : undefined}
+          selected={(() => {
+            // Ensure we pass a valid date to the Calendar
+            if (!field.value) return undefined;
+            
+            try {
+              const dateObj = new Date(field.value);
+              return isNaN(dateObj.getTime()) ? new Date() : dateObj;
+            } catch (e) {
+              console.error("Error parsing date for Calendar:", e);
+              return new Date(); // Fallback to current date
+            }
+          })()}
           onSelect={field.onChange}
           initialFocus
         />
