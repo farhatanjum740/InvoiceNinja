@@ -54,26 +54,6 @@ export function Sidebar({ className }: SidebarProps) {
       href: "/settings",
       icon: Settings,
     },
-    {
-      title: "Storage Test",
-      href: "/storage-test",
-      icon: Database,
-    },
-    {
-      title: "Supabase Test",
-      href: "/supabase-test",
-      icon: Database,
-    },
-    {
-      title: "Supabase Test Fixed",
-      href: "/supabase-test-fixed",
-      icon: Database,
-    },
-    {
-      title: "Supabase Test Original Fixed",
-      href: "/supabase-test-original-fixed",
-      icon: Database,
-    },
   ];
 
   const isActive = (path: string) => {
