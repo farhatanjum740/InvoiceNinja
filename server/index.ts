@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { updateSupabaseSchema, refreshSupabaseSchemaCache } from "./db";
+import { createRouterFixMiddleware } from "./stubs/router-fix";
 
 const app = express();
 // Increase JSON payload size limit to 10MB for image uploads
@@ -47,6 +48,9 @@ app.use((req, res, next) => {
   }
   
   const server = await registerRoutes(app);
+  
+  // Apply our router fix middleware to ensure all client routes work properly
+  createRouterFixMiddleware(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

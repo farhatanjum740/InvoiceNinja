@@ -18,6 +18,7 @@ import ReportsPage from "@/pages/reports-page";
 import StorageTestPage from "@/pages/storage-test-page";
 import SupabaseTestPage from "@/pages/supabase-test-page";
 import SupabaseTestPageFixed from "@/pages/supabase-test-page-fixed";
+import SupabaseTestPageOriginalFixed from "@/pages/supabase-test-page-original-fixed";
 import TestPage from "@/pages/test-page";
 
 // Auth Provider
@@ -73,6 +74,7 @@ function AppRoutes() {
       <ProtectedRoute path="/storage-test" component={StorageTestPage} />
       <ProtectedRoute path="/supabase-test" component={SupabaseTestPage} />
       <PublicRoute path="/supabase-test-fixed" component={SupabaseTestPageFixed} />
+      <PublicRoute path="/supabase-test-original-fixed" component={SupabaseTestPageOriginalFixed} />
       
       {/* Public test route */}
       <PublicRoute path="/test" component={TestPage} />
