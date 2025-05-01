@@ -57,10 +57,17 @@ export default function EditInvoicePage() {
   useEffect(() => {
     if (invoiceDetails) {
       // Combine invoice and items into a single form data object
+      // Convert string date values to Date objects to fix the "Invalid time value" error
+      const invoice = invoiceDetails.invoice;
+      
       const formData = {
-        ...invoiceDetails.invoice,
+        ...invoice,
+        // Parse dates properly
+        invoiceDate: invoice.invoiceDate ? new Date(invoice.invoiceDate) : null,
+        dueDate: invoice.dueDate ? new Date(invoice.dueDate) : null,
         items: invoiceDetails.items
       };
+      
       setInvoiceData(formData);
     }
   }, [invoiceDetails]);
