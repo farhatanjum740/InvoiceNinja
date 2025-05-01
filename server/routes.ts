@@ -5,6 +5,7 @@ import { storage } from "./simple-storage";
 import { setupAuth } from "./auth-supabase";
 import { supabase } from "./db";
 import storageApiRoutes from "./storage-api-routes";
+import supabaseApiRoutes from "./supabase-api-routes";
 
 // Create and configure the HTTP server
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -32,6 +33,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register storage API routes
   app.use('/api/storage', storageApiRoutes);
+
+  // Register Supabase API routes
+  app.use('/api/supabase', supabaseApiRoutes);
 
   // Company endpoints
   app.get("/api/company", async (req: Request, res: Response) => {

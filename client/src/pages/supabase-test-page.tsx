@@ -1,6 +1,6 @@
 import React from 'react';
-import SupabaseApiTest from '@/components/supabase-api-test';
+import SupabaseApiTestFixed from '@/components/supabase-api-test-fixed';
 
 export default function SupabaseTestPage() {
-  return <SupabaseApiTest />;
+  return <SupabaseApiTestFixed />;
 }
