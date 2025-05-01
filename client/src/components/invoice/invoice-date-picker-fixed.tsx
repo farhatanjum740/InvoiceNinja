@@ -123,32 +123,25 @@ export function InvoiceDatePicker({ field, label, isRequired = false }: DatePick
   }
   
   // TARGETED APPROACH: Fix only for the specific problematic 18:30:00 UTC format
-  // We know that specific invoice 30 has a date issue with "2025-05-01T18:30:00+00:00"
-  // This specific timestamp represents 6:30 PM UTC which is midnight in India, so it should display as May 2nd
-  
-  // We need to very precisely check if this is the specific problematic case
+  // This specific timestamp represents 6:30 PM UTC which is midnight in India, so it should display as the next day
   const isT1830SpecialCase = (date: any): boolean => {
     // Check if it's the exact string format pattern
     if (typeof date === 'string' && 
         (date.includes('T18:30:00+00:00') || 
          (date.includes('T18:30:00') && date.includes('+00:00')))) {
-      console.log('🔥 CRITICAL FIX: Detected 18:30:00 UTC format that needs timezone adjustment');
+      console.log('🔥 TARGETED FIX: Detected 18:30:00 UTC format that needs timezone adjustment');
       return true;
     }
     
-    // For Date objects, we need to check the original string value or time components
+    // For Date objects, we need to check the time components
     if (date instanceof Date) {
       try {
-        // Convert back to ISO string to check for the pattern
-        const isoString = date.toISOString();
-        
-        // Check if this is a Date object that was created from a 18:30:00 UTC string
-        // We can look at the hours/minutes to see if it's 18:30 UTC time
+        // Check if this is a Date object with 18:30 UTC time
         const hours = date.getUTCHours();
         const minutes = date.getUTCMinutes();
         
         if (hours === 18 && minutes === 30) {
-          console.log('🔥 CRITICAL FIX: Detected Date object with 18:30:00 UTC time');
+          console.log('🔥 TARGETED FIX: Detected Date object with 18:30:00 UTC time');
           return true;
         }
       } catch (e) {
@@ -160,35 +153,12 @@ export function InvoiceDatePicker({ field, label, isRequired = false }: DatePick
     return false;
   };
   
-  // DIRECT FIX FOR DISPLAY: Check if this is a special 18:30:00 UTC date from a specific invoice
-  // and force it to display the next day (May 2nd instead of May 1st)
+  // Handle date display with special case for 18:30 UTC format
   const getDisplayDate = (date: any) => {
-    // Special case handling for T18:30:00+00:00 format
-    if (typeof date === 'string' && 
-        (date.includes('T18:30:00+00:00') || 
-         (date.includes('T18:30:00') && date.includes('+00:00')))) {
-      console.log("🎯 Special date detected in DatePicker, applying +1 day fix", date);
-      try {
-        const dateParts = date.split('T')[0].split('-');
-        if (dateParts.length === 3) {
-          const year = parseInt(dateParts[0]);
-          const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
-          const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
-          
-          const localDate = new Date(year, month, day);
-          console.log("🎯 Fixed for display as:", format(localDate, "PPP"));
-          return format(localDate, "PPP");
-        }
-      } catch (e) {
-        console.error("Error processing special date:", e);
-      }
-    }
-    
     // Check if this is our special 18:30 UTC timestamp case
     if (isT1830SpecialCase(date)) {
       // Extract the date components and add a day
       try {
-        let dateString = "";
         let year = 0, month = 0, day = 0;
         
         if (typeof date === 'string') {
@@ -208,7 +178,7 @@ export function InvoiceDatePicker({ field, label, isRequired = false }: DatePick
         
         if (year > 0) {
           const adjustedDate = new Date(year, month, day);
-          console.log('🐛 FIXING DATE DISPLAY: 18:30 UTC timestamp detected, adding a day for Indian timezone', adjustedDate);
+          console.log('🛠️ FIXED DISPLAY: 18:30 UTC timestamp detected, showing as next day for Indian timezone', adjustedDate);
           return format(adjustedDate, "PPP");
         }
       } catch (e) {
@@ -271,28 +241,11 @@ export function InvoiceDatePicker({ field, label, isRequired = false }: DatePick
                   
                   if (year > 0) {
                     const adjustedDate = new Date(year, month, day);
-                    console.log('🔥 CALENDAR COMPONENT - Fixing 18:30 UTC timestamp to next day', adjustedDate);
+                    console.log('⚙️ CALENDAR FIX: Adjusted 18:30 UTC to show as next day', adjustedDate);
                     return adjustedDate;
                   }
                 } catch (e) {
                   console.error("Error adjusting 18:30 UTC date in calendar:", e);
-                }
-              }
-              
-              // Special handling for the 18:30:00 UTC time which should be next day in India
-              if (typeof field.value === 'string' && 
-                  (field.value.includes('T18:30:00+00:00') || 
-                   (field.value.includes('T18:30:00') && field.value.includes('+00:00')))) {
-                console.log("🌞 Calendar - Special case for India next-day date:", field.value);
-                const dateParts = field.value.split('T')[0].split('-');
-                if (dateParts.length === 3) {
-                  const year = parseInt(dateParts[0]);
-                  const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
-                  const day = parseInt(dateParts[2]) + 1; // Add a day for India time
-                  
-                  const localDate = new Date(year, month, day);
-                  console.log("🌞 Calendar - Converted to:", localDate);
-                  return localDate;
                 }
               }
               
