@@ -38,6 +38,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/supabase', supabaseApiRoutes);
   
   // Direct route for Supabase test page
+  // Simple diagnostic path to check server status
+  app.get('/server-check', (req, res) => {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Server Diagnostic</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+          .success { color: green; }
+          .error { color: red; }
+          h1 { color: #333; }
+          .box { border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 4px; }
+        </style>
+      </head>
+      <body>
+        <h1>Server Check Successful</h1>
+        <div class="box">
+          <p><span class="success">✓</span> Server is operational</p>
+          <p><span class="success">✓</span> This route is being served correctly by the Express server</p>
+          <p><span class="success">✓</span> Server time: ${new Date().toISOString()}</p>
+          <p><span class="success">✓</span> Environment: ${process.env.NODE_ENV || 'not set'}</p>
+        </div>
+        
+        <h2>Next Steps</h2>
+        <div class="box">
+          <p>If you're seeing this page but still experiencing 404 errors on other routes, the issue is likely with how your server handles client-side routing paths.</p>
+          <p>Follow the steps in <code>ROUTING_FIX_GUIDE.md</code> to configure your web server correctly.</p>
+        </div>
+        
+        <h2>Test Links</h2>
+        <div class="box">
+          <p>Try these links to test routing:</p>
+          <ul>
+            <li><a href="/direct-supabase-test">/direct-supabase-test</a> - Server-rendered test page</li>
+            <li><a href="/test">/test</a> - Simple client-side route</li>
+            <li><a href="/auth">/auth</a> - Login page</li>
+          </ul>
+        </div>
+      </body>
+      </html>
+    `);
+  });
+  
   app.get('/direct-supabase-test', (req, res) => {
     res.send(`
       <!DOCTYPE html>

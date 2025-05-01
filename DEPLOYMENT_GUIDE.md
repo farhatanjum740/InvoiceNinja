@@ -1,184 +1,251 @@
-# Deployment Guide: Invoice App with Supabase + Hostinger
+# InvoiceHub Deployment Guide
 
-This guide will help you deploy your invoice management application using Supabase for backend services and Hostinger for web hosting.
+This guide provides comprehensive instructions for deploying the InvoiceHub application to a production server.
 
 ## Prerequisites
 
-- A Supabase account and project created at [supabase.com](https://supabase.com)
-- A Hostinger account with Node.js hosting plan
-- Your invoice app codebase ready for deployment
+- A Virtual Private Server (VPS) or dedicated server running Ubuntu 20.04 or newer
+- Node.js 18+ installed
+- Nginx web server
+- PM2 process manager (`npm install -g pm2`)
+- Basic knowledge of Linux command line, Nginx, and Node.js
 
-## Step 1: Set Up Supabase
+## 1. Application Setup
 
-1. **Create a Supabase Project**:
-   - Go to [supabase.com](https://supabase.com) and create a new project
-   - Note your project URL and API keys from the Dashboard -> Settings -> API section
+### 1.1 Clone and Build the Application
 
-2. **Set Up Database Schema**:
-   - Connect to your Supabase database using the PostgreSQL connection string
-   - Run migrations to set up your database schema:
-     ```bash
-     SUPABASE_POSTGRES_URL=postgres://postgres:your-password@db.your-project-ref.supabase.co:5432/postgres npm run db:push
-     ```
+The simplest approach is to build the application locally and then transfer the files to your server:
 
-3. **Configure Authentication**:
-   - In the Supabase dashboard, go to Authentication -> Settings
-   - Ensure Email authentication is enabled
-   - Set up any other auth providers if needed
+```bash
+# On your local machine
+npm run build
 
-4. **Create Storage Buckets**:
-   - Go to Storage in your Supabase dashboard
-   - Create two buckets:
-     1. `company-logos` - For storing company logos
-     2. `invoice-attachments` - For storing invoice attachments
-   - Set the appropriate security policies for each bucket
+# Create a deployment package
+tar -czvf invoicehub-deploy.tar.gz dist/ .env.production package.json package-lock.json
 
-## Step 2: Build Your Application
+# Transfer to your server
+scp invoicehub-deploy.tar.gz user@your-server-ip:/path/to/deploy/
+```
 
-1. **Update Environment Variables**:
-   - Create `.env` file at the project root with your Supabase credentials:
-     ```
-     SUPABASE_URL=https://your-project-ref.supabase.co
-     SUPABASE_KEY=your-anon-key
-     SUPABASE_SERVICE_KEY=your-service-role-key
-     SUPABASE_POSTGRES_URL=postgres://postgres:your-password@db.your-project-ref.supabase.co:5432/postgres
-     SESSION_SECRET=your-random-secret-string
-     ```
+### 1.2 Server Setup
 
-2. **Create Client-Side Environment Variables**:
-   - Create `client/.env` file with:
-     ```
-     VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-     VITE_SUPABASE_KEY=your-anon-key
-     ```
+```bash
+# On your server
+cd /path/to/deploy
+tar -xzvf invoicehub-deploy.tar.gz
+npm ci --production  # Install production dependencies only
+```
 
-3. **Build Your Application**:
-   ```bash
-   # Build the client
-   cd client
-   npm run build
+## 2. Environment Configuration
 
-   # Build the server
-   cd ..
-   npm run build
-   ```
+Create a proper `.env` file in your production environment:
 
-## Step 3: Deploy to Hostinger
+```
+# Application settings
+NODE_ENV=production
+SESSION_SECRET=your-strong-session-secret
 
-1. **Create a Node.js Hosting Account on Hostinger**:
-   - Sign in to Hostinger
-   - Purchase a Node.js compatible hosting plan
-   - Create a new website or use an existing one
+# Supabase settings
+SUPABASE_URL=https://your-supabase-project.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
+SUPABASE_SERVICE_KEY=your-supabase-service-role-key
 
-2. **Access Your Hosting via SSH**:
-   - Get SSH credentials from Hostinger control panel
-   - Connect using a terminal or SSH client:
-     ```bash
-     ssh u123456789@your-hostinger-server.com
-     ```
+# Database URL for PostgreSQL session store
+DATABASE_URL=postgres://username:password@host:port/database
 
-3. **Upload Your Application**:
-   - Create a directory for your application:
-     ```bash
-     mkdir -p ~/public_html/invoice-app
-     cd ~/public_html/invoice-app
-     ```
+# Frontend environment variables (will be embedded during build)
+VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
+VITE_SUPABASE_KEY=your-supabase-anon-key
+```
 
-   - Upload your built application (using SFTP or Git):
-     ```bash
-     # If using Git
-     git clone https://your-repository-url.git .
-     
-     # If using SFTP, upload the following directories:
-     # - dist/ (compiled server code)
-     # - client/dist/ (compiled client code)
-     # - node_modules/ (dependencies)
-     # - server/ (server source code, if needed)
-     # - package.json
-     ```
+## 3. Database Setup
 
-4. **Set Environment Variables**:
-   - Create `.env` file on the server with your production environment variables
-   - Make sure it includes all the Supabase credentials
+Our application uses Supabase for the main database and a PostgreSQL connection for session persistence.
 
-5. **Install Dependencies**:
-   ```bash
-   npm install --production
-   ```
+### 3.1 Supabase Configuration
 
-6. **Set Up Process Manager (PM2)**:
-   ```bash
-   # Install PM2 globally
-   npm install -g pm2
-   
-   # Start your application
-   pm2 start dist/server/index.js --name invoice-app
-   
-   # Set up PM2 to start on server reboot
-   pm2 startup
-   pm2 save
-   ```
+Ensure your Supabase project has the correct schema. You don't need to manually create tables as our application handles schema creation and updates.
 
-7. **Configure Domain in Hostinger**:
-   - Go to Hostinger control panel
-   - Set up your domain to point to your Node.js application
-   - Configure Nginx as a reverse proxy to your Node.js app
+### 3.2 Database Connection
 
-8. **Set Up HTTPS with Let's Encrypt**:
-   - In Hostinger control panel, navigate to SSL/TLS certificates
-   - Request a Let's Encrypt certificate for your domain
-   - Activate the certificate for your website
+Verify the `DATABASE_URL` in your `.env` file. This connection is used for session storage.
 
-## Step 4: Test Your Deployment
+## 4. Process Management with PM2
 
-1. **Visit your domain** to verify that your application is running correctly.
-2. **Test the authentication system** by registering and logging in.
-3. **Test file uploads** for company logos to confirm Supabase Storage is working.
-4. **Create and manage invoices** to test the complete workflow.
+Create a PM2 ecosystem file named `ecosystem.config.js` in your deployment directory:
 
-## Troubleshooting
+```javascript
+module.exports = {
+  apps: [{
+    name: "invoicehub",
+    script: "dist/server/index.js",
+    instances: 1,
+    autorestart: true,
+    watch: false,
+    max_memory_restart: "1G",
+    env: {
+      NODE_ENV: "production",
+    }
+  }]
+};
+```
 
-- **Connection Issues**:
-  - Check your Supabase connection strings and API keys.
-  - Ensure your IP is allowed in Supabase's IP restriction settings.
+Start the application with PM2:
 
-- **Database Errors**:
-  - Review database logs in the Supabase dashboard.
-  - Check for schema version mismatches between your code and database.
+```bash
+pm2 start ecosystem.config.js
+pm2 save  # Save the process list for automatic startup
+```
 
-- **Application Errors**:
-  - Check PM2 logs: `pm2 logs invoice-app`
-  - Check Node.js application logs in Hostinger's panel.
+## 5. Nginx Configuration
 
-- **CORS Issues**:
-  - Add your domain to the allowed origins in Supabase Authentication settings.
+This is a crucial part for resolving routing issues.
 
-## Maintenance
+### 5.1 Create Nginx Configuration
 
-- **Database Updates**:
-  - When making schema changes, run migrations again.
+Create a new config file in `/etc/nginx/sites-available/invoicehub.conf`:
 
-- **Application Updates**:
-  ```bash
-  # Pull latest code
-  git pull
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;  # Replace with your domain
+
+    # Root directory for static files
+    root /path/to/deploy/dist/public;
+    
+    # API proxy - forward all API requests to the Node.js server
+    location /api/ {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+    
+    # Special server-rendered routes
+    location /server-check {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+    
+    location /direct-supabase-test {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+    
+    # Static file serving with cache headers
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|otf|eot)$ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000";
+        try_files $uri =404;
+    }
+    
+    # CRITICAL: For all other routes, serve index.html
+    # This is the key to making client-side routing work
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+    
+    # Error pages
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}
+```
+
+### 5.2 Enable the Configuration
+
+```bash
+ln -s /etc/nginx/sites-available/invoicehub.conf /etc/nginx/sites-enabled/
+sudo nginx -t  # Test the configuration
+sudo systemctl restart nginx
+```
+
+## 6. SSL/TLS Configuration
+
+It's highly recommended to secure your site with HTTPS. Use Let's Encrypt:
+
+```bash
+sudo apt update
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
+
+## 7. Troubleshooting Routing Issues
+
+### 7.1 Diagnosing 404 Errors
+
+If you're experiencing 404 errors when directly accessing routes like `/dashboard` or `/invoices`:
+
+1. First, check if server routes are working by accessing `/server-check` in your browser
+2. Verify your Nginx configuration has the correct `try_files $uri $uri/ /index.html;` directive
+3. Check Nginx error logs: `sudo tail -f /var/log/nginx/error.log`
+4. Check application logs: `pm2 logs invoicehub`
+
+### 7.2 Common Solutions
+
+- **Problem**: 404 on direct route access
+  - **Solution**: Ensure the Nginx `try_files` directive is correctly set up
   
-  # Build frontend and backend
-  npm run build
-  cd client && npm run build && cd ..
+- **Problem**: API routes return 404
+  - **Solution**: Verify the `/api/` location block in Nginx is properly proxying to port 5000
   
-  # Restart the application
-  pm2 restart invoice-app
-  ```
+- **Problem**: Static assets not loading
+  - **Solution**: Check the `root` directive points to the correct `dist/public` directory
 
-- **Backup Strategy**:
-  - Set up regular database backups in Supabase.
-  - Back up file storage periodically.
-  - Export important data as CSV/JSON for additional security.
+## 8. Updating the Application
 
-## Security Best Practices
+To update your application:
 
-- Keep your service key secure and never expose it client-side.
-- Regularly update your dependencies for security patches.
-- Set up proper Row Level Security (RLS) in Supabase for proper data isolation.
-- Use strong passwords and enable MFA for your Supabase and Hostinger accounts.
+```bash
+# On your local machine
+npm run build
+tar -czvf invoicehub-deploy.tar.gz dist/ .env.production package.json package-lock.json
+scp invoicehub-deploy.tar.gz user@your-server-ip:/path/to/deploy/
+
+# On your server
+cd /path/to/deploy
+pm2 stop invoicehub
+tar -xzvf invoicehub-deploy.tar.gz
+npm ci --production
+pm2 start ecosystem.config.js
+```
+
+## 9. Server Monitoring and Maintenance
+
+Regularly monitor your application:
+
+```bash
+pm2 monit  # Monitor application memory and CPU usage
+pm2 logs    # View application logs
+```
+
+Set up log rotation for Node.js application logs:
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 7
+```
+
+## 10. Testing Your Deployment
+
+After deployment, test these crucial paths:
+
+1. `/server-check` - Should show the server diagnostic page
+2. `/api/user` - Should return 401 if not logged in or user data if logged in
+3. `/dashboard` - Should redirect to login page if not authenticated
+4. `/auth` - Should show the authentication page
+5. Direct access to various routes like `/invoices`, `/customers`, etc.
+
+Thoroughly test the entire application flow, including uploading files, generating invoices, and any other critical functionality.
+
+## Further Assistance
+
+If you continue to experience issues with routing or other aspects of deployment, check the application logs and server configurations thoroughly. The most common causes of routing problems are incorrect Nginx configuration or issues with the build process.

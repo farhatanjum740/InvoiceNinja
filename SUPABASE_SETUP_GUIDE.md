@@ -1,208 +1,130 @@
-# Supabase Setup Guide for Invoice Management System
+# Supabase Setup Guide for InvoiceHub
 
-This guide will help you set up the necessary tables and structures in Supabase for your Invoice Management System.
+This guide will help you set up and configure your Supabase project for use with InvoiceHub. Supabase is used as the primary database and storage solution for the application.
 
-## Table Structures
+## 1. Creating a Supabase Project
 
-### 1. Users Table
-```sql
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  email TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL,
-  name TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+1. Go to [Supabase](https://supabase.com/) and sign in or create an account
+2. Create a new project by clicking "New Project"
+3. Enter a name for your project (e.g., "InvoiceHub")
+4. Choose a strong database password and save it securely
+5. Select a region closest to your users (for better performance)
+6. Click "Create new project"
+
+## 2. Getting API Keys
+
+After your project is created, you'll need to get the API keys from the Supabase dashboard:
+
+1. Go to the project dashboard
+2. Navigate to "Project Settings" → "API"
+3. You'll find two key types:
+   - **anon/public** key: Used for client-side requests with limited permissions
+   - **service_role** key: Used for server-side operations with full access
+
+Add these keys to your environment variables:
+
+```
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_KEY=your-anon-key
+SUPABASE_SERVICE_KEY=your-service-role-key
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_KEY=your-anon-key
 ```
 
-### 2. Companies Table
-```sql
-CREATE TABLE companies (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  name TEXT NOT NULL,
-  gstin TEXT,
-  address TEXT,
-  city TEXT,
-  state TEXT,
-  pincode TEXT,
-  email TEXT,
-  phone TEXT,
-  bank_name TEXT,
-  account_number TEXT,
-  ifsc_code TEXT,
-  logo TEXT
-);
-```
+## 3. Storage Buckets Setup
 
-### 3. Customers Table
-```sql
-CREATE TABLE customers (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  name TEXT NOT NULL,
-  email TEXT,
-  phone TEXT,
-  gstin TEXT,
-  billing_address TEXT,
-  billing_city TEXT,
-  billing_state TEXT,
-  billing_pincode TEXT,
-  shipping_address TEXT,
-  shipping_city TEXT,
-  shipping_state TEXT,
-  shipping_pincode TEXT,
-  same_as_shipping BOOLEAN DEFAULT TRUE
-);
-```
+InvoiceHub uses Supabase Storage for file uploads. You need to create the following storage buckets:
 
-### 4. Products Table
-```sql
-CREATE TABLE products (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  name TEXT NOT NULL,
-  description TEXT,
-  hsn_code TEXT,
-  unit TEXT,
-  rate DECIMAL(10,2) NOT NULL,
-  gst_rate INTEGER NOT NULL
-);
-```
+1. Go to "Storage" in the Supabase dashboard
+2. Create two buckets:
+   - `company-logos`: For company logo uploads
+   - `invoice-attachments`: For files attached to invoices
 
-### 5. Invoices Table
-```sql
-CREATE TABLE invoices (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  invoice_number TEXT NOT NULL,
-  customer_id INTEGER NOT NULL REFERENCES customers(id),
-  invoice_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  due_date TIMESTAMP WITH TIME ZONE,
-  status TEXT DEFAULT 'pending',
-  subtotal DECIMAL(10,2) NOT NULL,
-  cgst DECIMAL(10,2) NOT NULL,
-  sgst DECIMAL(10,2) NOT NULL,
-  igst DECIMAL(10,2) NOT NULL,
-  total DECIMAL(10,2) NOT NULL,
-  notes TEXT,
-  terms_and_conditions TEXT,
-  template_id TEXT DEFAULT 'standard',
-  color_theme TEXT DEFAULT 'blue'
-);
-```
+For each bucket, set the following permissions:
 
-### 6. Invoice Items Table
-```sql
-CREATE TABLE invoice_items (
-  id SERIAL PRIMARY KEY,
-  invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-  product_id INTEGER REFERENCES products(id),
-  description TEXT NOT NULL,
-  hsn_code TEXT,
-  quantity DECIMAL(10,2) NOT NULL,
-  rate DECIMAL(10,2) NOT NULL,
-  gst_rate INTEGER NOT NULL,
-  amount DECIMAL(10,2) NOT NULL
-);
-```
+### Company Logos Bucket
+1. Go to "Policies" tab for the bucket
+2. Create policy for INSERT:
+   - Name: "Allow authenticated users to upload company logos"
+   - Policy definition: `(auth.role() = 'authenticated')`
+3. Create policy for SELECT:
+   - Name: "Allow anyone to view company logos"
+   - Policy definition: `true`
 
-### 7. Create Indexes for Better Performance
-```sql
-CREATE INDEX idx_companies_user_id ON companies(user_id);
-CREATE INDEX idx_customers_user_id ON customers(user_id);
-CREATE INDEX idx_products_user_id ON products(user_id);
-CREATE INDEX idx_invoices_user_id ON invoices(user_id);
-CREATE INDEX idx_invoices_customer_id ON invoices(customer_id);
-CREATE INDEX idx_invoice_items_invoice_id ON invoice_items(invoice_id);
-```
+### Invoice Attachments Bucket
+1. Go to "Policies" tab for the bucket
+2. Create policy for INSERT:
+   - Name: "Allow authenticated users to upload attachments"
+   - Policy definition: `(auth.role() = 'authenticated')`
+3. Create policy for SELECT:
+   - Name: "Allow authenticated users to view attachments"
+   - Policy definition: `(auth.role() = 'authenticated')`
 
-## How to Set Up Tables in Supabase
+## 4. Database Schema
 
-1. Log in to your Supabase account at [https://app.supabase.io/](https://app.supabase.io/)
-2. Select your project
-3. Go to the "SQL Editor" section
-4. Create a new query
-5. Copy and paste the SQL code for each table
-6. Run the query
+The application will automatically create and update the database schema. However, it's good to know the tables that will be created:
 
-You can also use the provided scripts:
-- `scripts/create-supabase-tables.ts`: Checks if tables exist in Supabase
-- `scripts/migrate-to-supabase.ts`: Migrates data from your current database to Supabase
+- `users`: User accounts
+- `company`: Company profiles
+- `customers`: Customer database
+- `products`: Product catalog
+- `invoices`: Invoice data
+- `invoice_items`: Line items for invoices
+- `settings`: User preferences and settings
 
-## Setting Up Row-Level Security (RLS)
+## 5. Configuration for Indian GST
 
-For proper security, set up Row-Level Security (RLS) policies for your tables:
+For Indian GST requirements, the following fields are included in the schema:
 
-```sql
--- Enable RLS on all tables
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
+- Products table includes `hsn_code`, `cgst_rate`, `sgst_rate`, and `igst_rate` fields
+- Invoices determine the appropriate tax (CGST+SGST or IGST) based on shipping state comparison
+- Company table includes fields for GSTIN and other tax identifiers
 
--- Create policies for users
-CREATE POLICY "Users can view their own data" ON users
-  FOR SELECT USING (auth.uid() = id);
+## 6. Testing Your Configuration
 
--- Create policies for companies
-CREATE POLICY "Users can manage their own companies" ON companies
-  FOR ALL USING (auth.uid() = user_id);
+To test if your Supabase setup is working correctly:
 
--- Create policies for customers
-CREATE POLICY "Users can manage their own customers" ON customers
-  FOR ALL USING (auth.uid() = user_id);
+1. Run the application locally
+2. Navigate to `/server-check` to verify the server is running
+3. Navigate to `/direct-supabase-test` to test direct Supabase API connectivity
+4. Try to create a user account through the registration form
+5. Upload a test company logo to verify storage is working
 
--- Create policies for products
-CREATE POLICY "Users can manage their own products" ON products
-  FOR ALL USING (auth.uid() = user_id);
+## 7. Security Considerations
 
--- Create policies for invoices
-CREATE POLICY "Users can manage their own invoices" ON invoices
-  FOR ALL USING (auth.uid() = user_id);
+- Never expose your `service_role` key in client-side code
+- All Supabase operations from the frontend should use the `/api/supabase/*` proxy endpoints
+- Direct Supabase client operations should only use the anon key
+- Regularly rotate your API keys for additional security
 
--- Create policies for invoice items
-CREATE POLICY "Users can manage their own invoice items" ON invoice_items
-  FOR ALL USING (
-    auth.uid() IN (
-      SELECT user_id FROM invoices WHERE id = invoice_id
-    )
-  );
-```
+## 8. Troubleshooting
 
-## Updating Your App to Use Supabase
+### Connection Issues
 
-After setting up your tables, you'll need to update your application to use Supabase instead of the current database. The key files to modify are:
+If you experience connection issues with Supabase:
 
-1. `server/db.ts`: Update to use Supabase
-2. `server/storage.ts`: Update to use Supabase for data storage
+1. Check that the environment variables are set correctly
+2. Verify that your Supabase project is active and not in maintenance mode
+3. Check that you're not hitting any rate limits
+4. Try using the `/server-check` and `/direct-supabase-test` routes to diagnose issues
 
-## Supabase Storage Setup
+### Permission Errors
 
-For file storage (company logos, etc.), set up the following buckets in Supabase Storage:
+If you see permission errors when accessing data:
 
-1. `company-logos`: For storing company logos
-2. `invoice-attachments`: For storing invoice attachments
+1. Check your Row Level Security (RLS) policies
+2. Verify that the user is authenticated if the operation requires authentication
+3. Make sure you're using the server-side proxy for operations that require elevated permissions
 
-Example RLS policies for storage:
+## 9. Production Considerations
 
-```sql
--- For company logos
-CREATE POLICY "Users can upload their own company logos"
-ON storage.objects FOR INSERT
-WITH CHECK (
-  bucket_id = 'company-logos' AND
-  auth.uid()::text = (storage.foldername(name))[1]
-);
+For production deployments:
 
--- For invoice attachments
-CREATE POLICY "Users can upload their own invoice attachments"
-ON storage.objects FOR INSERT
-WITH CHECK (
-  bucket_id = 'invoice-attachments' AND
-  auth.uid()::text = (storage.foldername(name))[1]
-);
-```
+1. Use a dedicated Supabase project (separate from development)
+2. Set up database backups (available in Supabase Pro plans)
+3. Consider upgrading to a paid plan for better performance and support
+4. Monitor your database and storage usage to avoid hitting limits
+
+## Further Support
+
+If you need additional assistance with Supabase setup, refer to the [official Supabase documentation](https://supabase.com/docs) or contact their support team.
