@@ -10,6 +10,7 @@ import ProductsPage from "@/pages/products-page";
 import ReportsPage from "@/pages/reports-page";
 import CompanyPage from "@/pages/company-page";
 import CreateInvoicePage from "@/pages/create-invoice-page";
+import EditInvoicePage from "@/pages/edit-invoice-page";
 import LandingPageNew from "@/pages/landing-page-new";
 import { ProtectedRoute } from "./lib/protected-route";
 import { Providers } from "./providers";
@@ -29,6 +30,7 @@ function App() {
         <ProtectedRoute path="/invoices" component={InvoicesPage} />
         <ProtectedRoute path="/invoices/create" component={CreateInvoicePage} />
         <ProtectedRoute path="/invoices/new" component={CreateInvoicePage} />
+        <ProtectedRoute path="/invoices/edit/:id" component={EditInvoicePage} />
         <ProtectedRoute path="/customers" component={CustomersPage} />
         <ProtectedRoute path="/products" component={ProductsPage} />
         <ProtectedRoute path="/reports" component={ReportsPage} />
