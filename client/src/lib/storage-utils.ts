@@ -1,5 +1,6 @@
 import imageCompression from 'browser-image-compression';
 import { uploadFile, deleteFile, STORAGE_BUCKETS } from './supabase';
+import { getPublicUrl } from './storage-api';
 
 // Maximum file size for images in MB
 const MAX_FILE_SIZE_MB = 1;

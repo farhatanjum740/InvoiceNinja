@@ -83,39 +83,26 @@ export async function initializeStorage() {
   // If you want to create buckets, use Supabase Dashboard or a migration script with admin privileges
 }
 
-// Utility for uploading files
+// Import the StorageAPI for server-side storage operations
+import { uploadFile as apiUploadFile, deleteFile as apiDeleteFile } from '@/lib/storage-api';
+
+// Utility for uploading files - now using the server API instead of direct Supabase calls
 export async function uploadFile(
   bucket: string,
   file: File,
   path: string = ''
 ): Promise<{ path: string; url: string } | null> {
   try {
-    // Generate a unique file name
+    // Generate a unique file name prefix to avoid collisions
     const timestamp = new Date().getTime();
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${path}${path ? '/' : ''}${timestamp}-${file.name.substring(0, 20)}.${fileExtension}`;
+    const filePathPrefix = path ? `${path}/${timestamp}` : `${timestamp}`;
     
-    // Upload the file
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-    
-    if (error) {
-      console.error("Error uploading file:", error);
-      return null;
-    }
-    
-    // Get the public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(data.path);
+    // Use our server-side storage API for upload
+    const result = await apiUploadFile(bucket, file, filePathPrefix);
     
     return {
-      path: data.path,
-      url: publicUrl
+      path: result.path,
+      url: result.url
     };
   } catch (error) {
     console.error("Error in uploadFile:", error);
@@ -123,19 +110,10 @@ export async function uploadFile(
   }
 }
 
-// Utility for deleting files
+// Utility for deleting files - now using the server API instead of direct Supabase calls
 export async function deleteFile(bucket: string, path: string): Promise<boolean> {
   try {
-    const { error } = await supabase.storage
-      .from(bucket)
-      .remove([path]);
-    
-    if (error) {
-      console.error("Error deleting file:", error);
-      return false;
-    }
-    
-    return true;
+    return await apiDeleteFile(bucket, path);
   } catch (error) {
     console.error("Error in deleteFile:", error);
     return false;
