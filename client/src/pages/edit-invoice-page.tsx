@@ -68,8 +68,24 @@ export default function EditInvoicePage() {
           try {
             if (!invoice.invoiceDate) return null;
             
-            // Try to parse the date using different approaches
+            // Log the original date for debugging
             console.log("Original invoiceDate from Supabase:", invoice.invoiceDate);
+            
+            // DIRECT FIX: Check if this is the specific format "2025-05-01T18:30:00+00:00"
+            // This is a special case for the invoice with May 2nd (in Indian time) but stored as May 1st UTC evening
+            if (typeof invoice.invoiceDate === 'string' && invoice.invoiceDate.includes('T18:30:00+00:00')) {
+              console.log("Detected special case for May 2nd invoice");
+              const dateParts = invoice.invoiceDate.split('T')[0].split('-');
+              if (dateParts.length === 3) {
+                const year = parseInt(dateParts[0]);
+                const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
+                const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
+                
+                const localDate = new Date(year, month, day);
+                console.log("Converted to local Indian date:", localDate);
+                return localDate;
+              }
+            }
             
             // First attempt: Parse as ISO string with date-fns
             if (typeof invoice.invoiceDate === 'string') {
@@ -106,8 +122,24 @@ export default function EditInvoicePage() {
           try {
             if (!invoice.dueDate) return null;
             
-            // Try to parse the date using different approaches
+            // Log the original date for debugging
             console.log("Original dueDate from Supabase:", invoice.dueDate);
+            
+            // DIRECT FIX: Check if this is the specific format "2025-05-06T18:30:00+00:00"
+            // Handles the same pattern as invoice date
+            if (typeof invoice.dueDate === 'string' && invoice.dueDate.includes('T18:30:00+00:00')) {
+              console.log("Detected special case for due date");
+              const dateParts = invoice.dueDate.split('T')[0].split('-');
+              if (dateParts.length === 3) {
+                const year = parseInt(dateParts[0]);
+                const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
+                const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
+                
+                const localDate = new Date(year, month, day);
+                console.log("Converted to local Indian date for due date:", localDate);
+                return localDate;
+              }
+            }
             
             // First attempt: Parse as ISO string with date-fns
             if (typeof invoice.dueDate === 'string') {
