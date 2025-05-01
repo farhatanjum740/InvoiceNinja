@@ -11,6 +11,7 @@ import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
 import InvoicesPage from "@/pages/invoices-page";
 import CreateInvoicePage from "@/pages/create-invoice-page";
+import EditInvoicePage from "@/pages/edit-invoice-page";
 import CustomersPage from "@/pages/customers-page";
 import ProductsPage from "@/pages/products-page";
 import CompanyPage from "@/pages/company-page";
@@ -62,6 +63,7 @@ function AppRoutes() {
       <ProtectedRoute path="/dashboard" component={DashboardPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
       <ProtectedRoute path="/invoices/create" component={CreateInvoicePage} />
+      <ProtectedRoute path="/invoices/edit/:id" component={EditInvoicePage} />
       <ProtectedRoute path="/customers" component={CustomersPage} />
       <ProtectedRoute path="/products" component={ProductsPage} />
       <ProtectedRoute path="/company" component={CompanyPage} />

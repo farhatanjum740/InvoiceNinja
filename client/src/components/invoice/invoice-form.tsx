@@ -53,9 +53,11 @@ interface InvoiceFormProps {
   isLoading: boolean;
   onDataChange: (data: any) => void;
   onSuccess: () => void;
+  initialData?: any;
+  isEditing?: boolean;
 }
 
-export function InvoiceForm({ company, customers, products, isLoading, onDataChange, onSuccess }: InvoiceFormProps) {
+export function InvoiceForm({ company, customers, products, isLoading, onDataChange, onSuccess, initialData, isEditing = false }: InvoiceFormProps) {
   const { toast } = useToast();
   // Explicitly initialize with an empty array and force the type
   const [invoiceItems, setInvoiceItems] = useState<Array<any>>([]);
@@ -82,45 +84,107 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
     },
   });
 
-  // Load saved form state if available
+  // Load initial data or saved form state if available
   useEffect(() => {
-    const savedFormState = localStorage.getItem('invoice-form-state');
-    if (savedFormState) {
+    // If editing existing invoice, use provided initial data
+    if (isEditing && initialData) {
+      console.log("Loading initial data for editing:", initialData);
       try {
-        const parsedState = JSON.parse(savedFormState);
+        // Load invoice form values
+        const formValues: any = {
+          id: initialData.id,
+          invoiceNumber: initialData.invoiceNumber,
+          customerId: initialData.customerId,
+          invoiceDate: new Date(initialData.invoiceDate),
+          status: initialData.status,
+          notes: initialData.notes || "Thank you for your business!",
+          termsAndConditions: initialData.termsAndConditions || "1. Payment due within 30 days\n2. Goods once sold cannot be returned"
+        };
         
-        // Restore form values - need to handle dates specially
-        if (parsedState.formValues) {
-          // Convert string dates back to Date objects
-          const formValues = {...parsedState.formValues};
-          if (formValues.invoiceDate) {
-            formValues.invoiceDate = new Date(formValues.invoiceDate);
-          }
-          if (formValues.dueDate) {
-            formValues.dueDate = new Date(formValues.dueDate);
-          }
-          // Set the form values
-          Object.entries(formValues).forEach(([key, value]) => {
-            form.setValue(key as any, value);
-          });
+        // Set due date if it exists
+        if (initialData.dueDate) {
+          formValues.dueDate = new Date(initialData.dueDate);
         }
         
-        // Restore other state values
-        if (parsedState.invoiceItems) setInvoiceItems(parsedState.invoiceItems);
-        if (parsedState.selectedCustomer) setSelectedCustomer(parsedState.selectedCustomer);
-        if (parsedState.selectedTemplate) setSelectedTemplate(parsedState.selectedTemplate);
-        if (parsedState.selectedColor) setSelectedColor(parsedState.selectedColor);
-        if (parsedState.subtotal) setSubtotal(parsedState.subtotal);
-        if (parsedState.gstTotals) setGstTotals(parsedState.gstTotals);
-        if (parsedState.total) setTotal(parsedState.total);
+        // Set the form values
+        Object.entries(formValues).forEach(([key, value]) => {
+          if (value !== undefined) {
+            form.setValue(key as any, value);
+          }
+        });
         
-        // Mark that we've already loaded a draft
+        // Set invoice items
+        if (initialData.items && Array.isArray(initialData.items)) {
+          setInvoiceItems(initialData.items);
+        }
+        
+        // Find and set selected customer
+        if (customers && customers.length > 0) {
+          const customer = customers.find(c => c.id === initialData.customerId);
+          if (customer) {
+            setSelectedCustomer(customer);
+          }
+        }
+        
+        // Set other state values if available
+        if (initialData.subtotal !== undefined) setSubtotal(parseFloat(initialData.subtotal));
+        if (initialData.cgst !== undefined || initialData.sgst !== undefined || initialData.igst !== undefined) {
+          setGstTotals({
+            cgst: parseFloat(initialData.cgst) || 0,
+            sgst: parseFloat(initialData.sgst) || 0,
+            igst: parseFloat(initialData.igst) || 0
+          });
+        }
+        if (initialData.totalAmount !== undefined) setTotal(parseFloat(initialData.totalAmount));
+        if (initialData.templateId) setSelectedTemplate(initialData.templateId);
+        if (initialData.colorTheme) setSelectedColor(initialData.colorTheme);
+        
+        // Don't generate new invoice number when editing
         setIsGeneratingInvoiceNumber(false);
       } catch (e) {
-        console.error("Error parsing saved form state:", e);
+        console.error("Error loading initial data for editing:", e);
+      }
+    } 
+    // Otherwise, check for saved draft in localStorage (only for new invoices)
+    else if (!isEditing) {
+      const savedFormState = localStorage.getItem('invoice-form-state');
+      if (savedFormState) {
+        try {
+          const parsedState = JSON.parse(savedFormState);
+          
+          // Restore form values - need to handle dates specially
+          if (parsedState.formValues) {
+            // Convert string dates back to Date objects
+            const formValues = {...parsedState.formValues};
+            if (formValues.invoiceDate) {
+              formValues.invoiceDate = new Date(formValues.invoiceDate);
+            }
+            if (formValues.dueDate) {
+              formValues.dueDate = new Date(formValues.dueDate);
+            }
+            // Set the form values
+            Object.entries(formValues).forEach(([key, value]) => {
+              form.setValue(key as any, value);
+            });
+          }
+          
+          // Restore other state values
+          if (parsedState.invoiceItems) setInvoiceItems(parsedState.invoiceItems);
+          if (parsedState.selectedCustomer) setSelectedCustomer(parsedState.selectedCustomer);
+          if (parsedState.selectedTemplate) setSelectedTemplate(parsedState.selectedTemplate);
+          if (parsedState.selectedColor) setSelectedColor(parsedState.selectedColor);
+          if (parsedState.subtotal) setSubtotal(parsedState.subtotal);
+          if (parsedState.gstTotals) setGstTotals(parsedState.gstTotals);
+          if (parsedState.total) setTotal(parsedState.total);
+          
+          // Mark that we've already loaded a draft
+          setIsGeneratingInvoiceNumber(false);
+        } catch (e) {
+          console.error("Error parsing saved form state:", e);
+        }
       }
     }
-  }, []);
+  }, [initialData, isEditing, form, customers]);
 
   // Generate a new invoice number
   useEffect(() => {
