@@ -99,14 +99,39 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
           customerId: initialData.customerId,
           // Ensure we have a valid date by using current date as fallback
           invoiceDate: (() => {
-            console.log("Original invoice date:", initialData.invoiceDate);
+            console.log("Original invoice date in InvoiceForm:", initialData.invoiceDate);
             try {
+              // First check for the special Indian date case (18:30:00 UTC stored format)
+              if (typeof initialData.invoiceDate === 'string' && 
+                  (initialData.invoiceDate.includes('T18:30:00+00:00') || 
+                   (initialData.invoiceDate.includes('T18:30:00') && initialData.invoiceDate.includes('+00:00')))) {
+                console.log("🔄 INVOICE FORM: Detected special case for Indian next-day invoice");
+                const dateParts = initialData.invoiceDate.split('T')[0].split('-');
+                if (dateParts.length === 3) {
+                  const year = parseInt(dateParts[0]);
+                  const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
+                  const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
+                  
+                  const localDate = new Date(year, month, day);
+                  console.log("🔄 INVOICE FORM: Using Indian local date:", localDate);
+                  return localDate;
+                }
+              }
+              
+              // Standard parsing for other formats
               const parsedDate = initialData.invoiceDate ? new Date(initialData.invoiceDate) : new Date();
+              
               // Check if date is valid
               if (isNaN(parsedDate.getTime())) {
                 console.warn("Invalid invoice date detected, using current date");
                 return new Date();
               }
+              
+              // Debug output of the parsed date
+              console.log("Standard parsed invoice date in form:", parsedDate, 
+                "Month:", parsedDate.getMonth() + 1, 
+                "Day:", parsedDate.getDate());
+              
               return parsedDate;
             } catch (e) {
               console.error("Error parsing invoice date:", e);
@@ -121,9 +146,39 @@ export function InvoiceForm({ company, customers, products, isLoading, onDataCha
         // Set due date if it exists
         if (initialData.dueDate) {
           try {
+            console.log("Original due date in InvoiceForm:", initialData.dueDate);
+            
+            // Check for the special Indian date case (18:30:00 UTC stored format)
+            if (typeof initialData.dueDate === 'string' && 
+                (initialData.dueDate.includes('T18:30:00+00:00') || 
+                 (initialData.dueDate.includes('T18:30:00') && initialData.dueDate.includes('+00:00')))) {
+              console.log("🔄 INVOICE FORM: Detected special case for Indian next-day due date");
+              const dateParts = initialData.dueDate.split('T')[0].split('-');
+              if (dateParts.length === 3) {
+                const year = parseInt(dateParts[0]);
+                const month = parseInt(dateParts[1]) - 1; // JS months are 0-indexed
+                const day = parseInt(dateParts[2]) + 1; // Add a day to convert from UTC evening to next Indian date
+                
+                const localDate = new Date(year, month, day);
+                console.log("🔄 INVOICE FORM: Using Indian local date for due date:", localDate);
+                formValues.dueDate = localDate;
+                // We've handled this special case, but don't return early - continue with the function
+              }
+            }
+            
+            // Standard parsing for other formats
             const parsedDueDate = new Date(initialData.dueDate);
+            
             // Check if date is valid
             formValues.dueDate = isNaN(parsedDueDate.getTime()) ? null : parsedDueDate;
+            
+            // Debug output
+            console.log("Standard parsed due date in form:", formValues.dueDate,
+              formValues.dueDate ? {
+                "Month:": formValues.dueDate.getMonth() + 1,
+                "Day:": formValues.dueDate.getDate() 
+              } : "None");
+            
           } catch (e) {
             console.error("Error parsing due date:", e);
             formValues.dueDate = null; // Don't set an invalid date

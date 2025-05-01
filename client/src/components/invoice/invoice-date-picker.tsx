@@ -105,6 +105,22 @@ interface DatePickerProps {
 }
 
 export function InvoiceDatePicker({ field, label, isRequired = false }: DatePickerProps) {
+  // DIRECT DEBUG: Log all field values to diagnose date issues
+  console.log("⚠️ DATEPICKER RAW FIELD VALUE:", field.value, "Type:", typeof field.value);
+  if (field.value instanceof Date) {
+    console.log("⚠️ DATEPICKER DATE OBJECT INFO:", {
+      toString: field.value.toString(),
+      toISOString: field.value.toISOString(),
+      valueOf: field.value.valueOf(),
+      getDate: field.value.getDate(),
+      getMonth: field.value.getMonth(),
+      getFullYear: field.value.getFullYear(),
+      getUTCDate: field.value.getUTCDate(),
+      getUTCMonth: field.value.getUTCMonth(),
+      getUTCFullYear: field.value.getUTCFullYear()
+    });
+  }
+  
   // DIRECT FIX FOR DISPLAY: Check if this is a special 18:30:00 UTC date from a specific invoice
   // and force it to display the next day (May 2nd instead of May 1st)
   const getDisplayDate = (date: any) => {
