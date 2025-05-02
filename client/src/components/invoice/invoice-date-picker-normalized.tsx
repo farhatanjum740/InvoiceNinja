@@ -22,24 +22,24 @@ export function InvoiceDatePickerNormalized({ field, label, isRequired = false }
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   
   // Parse simple YYYY-MM-DD format strings from server
-  const parseNormalizedDate = (dateString: string | null | undefined): Date | null => {
-    if (!dateString) return null;
+  const parseNormalizedDate = (dateValue: any): Date | null => {
+    if (!dateValue) return null;
     
     try {
       // For simple YYYY-MM-DD format (what our server now returns)
-      if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-        console.log('Invoice Date Picker: Using normalized date from server:', dateString);
-        const [year, month, day] = dateString.split('-').map(Number);
+      if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+        console.log('Invoice Date Picker: Using normalized date from server:', dateValue);
+        const [year, month, day] = dateValue.split('-').map(Number);
         return new Date(year, month-1, day);
       }
       
       // For Date objects
-      if (dateString instanceof Date && !isNaN(dateString.getTime())) {
-        return dateString;
+      if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+        return dateValue;
       }
       
       // Attempt to parse anything else
-      const date = new Date(dateString);
+      const date = new Date(dateValue);
       return !isNaN(date.getTime()) ? date : null;
     } catch (e) {
       console.error('Error parsing date:', e);

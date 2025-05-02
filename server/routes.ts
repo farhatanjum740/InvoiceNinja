@@ -6,6 +6,7 @@ import { setupAuth } from "./auth-supabase";
 import { supabase } from "./db";
 import storageApiRoutes from "./storage-api-routes";
 import supabaseApiRoutes from "./supabase-api-routes";
+import { normalizeDate } from "./utils/date-utils";
 
 // Create and configure the HTTP server
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -447,46 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const invoices = await storage.getInvoicesByUserId(req.user.id);
       
-      // Helper function to normalize any date to YYYY-MM-DD format
-      const normalizeDate = (dateValue) => {
-        if (!dateValue) return null;
-        
-        try {
-          // For T18:30:00 UTC format (special Indian date case)
-          if (typeof dateValue === 'string' && dateValue.includes('T18:30:00')) {
-            // Extract date part (YYYY-MM-DD), parse it, and add one day
-            const datePart = dateValue.split('T')[0];
-            const [year, month, day] = datePart.split('-').map(num => parseInt(num));
-            
-            // Create a new date using local time zone (add one day for Indian timezone)
-            const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
-            
-            // Format as ISO string but only keep the date part (YYYY-MM-DD)
-            return correctedDate.toISOString().split('T')[0];
-          } 
-          // For any other date format
-          else {
-            let dateObj;
-            if (dateValue instanceof Date) {
-              dateObj = dateValue;
-            } else {
-              dateObj = new Date(dateValue);
-            }
-            
-            if (isNaN(dateObj.getTime())) {
-              console.warn("SERVER: Invalid date detected:", dateValue);
-              return null;
-            }
-            
-            return dateObj.toISOString().split('T')[0];
-          }
-        } catch (err) {
-          console.error("SERVER: Error normalizing date:", err);
-          return null;
-        }
-      };
-      
-      // Fix all dates in the invoices list
+      // Fix all dates in the invoices list using the imported normalizeDate function
       const fixedInvoices = invoices.map(invoice => {
         const fixedInvoice = {...invoice};
         
@@ -627,46 +589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...invoiceWithItems.invoice
       };
       
-      // Helper function to normalize any date to YYYY-MM-DD format
-      const normalizeDate = (dateValue) => {
-        if (!dateValue) return null;
-        
-        try {
-          // For T18:30:00 UTC format (special Indian date case)
-          if (typeof dateValue === 'string' && dateValue.includes('T18:30:00')) {
-            // Extract date part (YYYY-MM-DD), parse it, and add one day
-            const datePart = dateValue.split('T')[0];
-            const [year, month, day] = datePart.split('-').map(num => parseInt(num));
-            
-            // Create a new date using local time zone (add one day for Indian timezone)
-            const correctedDate = new Date(year, month-1, day+1, 12, 0, 0);
-            
-            // Format as ISO string but only keep the date part (YYYY-MM-DD)
-            return correctedDate.toISOString().split('T')[0];
-          } 
-          // For any other date format
-          else {
-            let dateObj;
-            if (dateValue instanceof Date) {
-              dateObj = dateValue;
-            } else {
-              dateObj = new Date(dateValue);
-            }
-            
-            if (isNaN(dateObj.getTime())) {
-              console.warn("SERVER: Invalid date detected:", dateValue);
-              return null;
-            }
-            
-            return dateObj.toISOString().split('T')[0];
-          }
-        } catch (err) {
-          console.error("SERVER: Error normalizing date:", err);
-          return null;
-        }
-      };
-      
-      // Handle invoice date
+      // Handle invoice date using the imported normalizeDate function
       const originalInvoiceDate = fixedInvoice.invoiceDate;
       fixedInvoice.invoiceDate = normalizeDate(originalInvoiceDate);
       if (originalInvoiceDate !== fixedInvoice.invoiceDate) {
