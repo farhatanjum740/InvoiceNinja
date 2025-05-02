@@ -34,17 +34,27 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       setProgressStep('Rendering invoice content...');
       
       // Better rendering with higher quality and support for logos
+      // Modified to avoid security issues with browser restrictions
       const canvas = await html2canvas(invoiceElement, {
         scale: 1.5, // Higher scale for better quality
         logging: false,
         useCORS: true,
         imageTimeout: 5000, // Longer timeout for complex invoices
-        allowTaint: true,
+        allowTaint: false, // Changed to false to avoid security issues
         backgroundColor: "#ffffff",
         onclone: (document) => {
-          // Fix for images not loading in PDF
+          // Handle images more carefully
           Array.from(document.images).forEach(img => {
-            img.setAttribute('crossorigin', 'anonymous');
+            if (img.src.startsWith('data:')) {
+              // Data URLs are already safe
+              return;
+            }
+            // Use anonymous mode for images that support it
+            try {
+              img.crossOrigin = "anonymous";
+            } catch (e) {
+              console.warn("Could not set crossOrigin for image", img.src);
+            }
           });
           console.log("Preparing document clone for PDF generation");
         }
@@ -159,7 +169,21 @@ export function InvoicePdf({ invoice }: InvoicePdfProps) {
       const invoiceNumber = invoice.invoice.invoiceNumber || "invoice";
       const filename = `${invoiceNumber.replace(/[^\w-]/g, "-")}.pdf`;
       
-      pdf.save(filename);
+      // Use a more browser-friendly approach to trigger the download
+      // This avoids the 'allowDownloadsWithoutUserActivation' issue
+      const blob = pdf.output('blob');
+      const url = URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = url;
+      downloadLink.download = filename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(url);
+      }, 100);
       
       setProgressStep('PDF downloaded successfully!');
     } catch (error) {
