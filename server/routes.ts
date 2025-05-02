@@ -454,7 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Handle invoice date
         if (fixedInvoice.invoiceDate) {
-          const originalDate = fixedInvoice.invoiceDate;
+          const originalDate = fixedInvoice.invoiceDate as string;
           fixedInvoice.invoiceDate = normalizeDate(originalDate);
           if (originalDate !== fixedInvoice.invoiceDate) {
             console.log(`Fixed invoice ${fixedInvoice.id} date from ${originalDate} to ${fixedInvoice.invoiceDate}`);
@@ -463,7 +463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Handle due date
         if (fixedInvoice.dueDate) {
-          const originalDueDate = fixedInvoice.dueDate;
+          const originalDueDate = fixedInvoice.dueDate as string;
           fixedInvoice.dueDate = normalizeDate(originalDueDate);
           if (originalDueDate !== fixedInvoice.dueDate) {
             console.log(`Fixed invoice ${fixedInvoice.id} due date from ${originalDueDate} to ${fixedInvoice.dueDate}`);
@@ -590,14 +590,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       // Handle invoice date using the imported normalizeDate function
-      const originalInvoiceDate = fixedInvoice.invoiceDate;
+      const originalInvoiceDate = fixedInvoice.invoiceDate as string;
       fixedInvoice.invoiceDate = normalizeDate(originalInvoiceDate);
       if (originalInvoiceDate !== fixedInvoice.invoiceDate) {
         console.log("SERVER: Fixed invoice date from", originalInvoiceDate, "to", fixedInvoice.invoiceDate);
       }
       
       // Handle due date
-      const originalDueDate = fixedInvoice.dueDate;
+      const originalDueDate = fixedInvoice.dueDate as string;
       fixedInvoice.dueDate = normalizeDate(originalDueDate);
       if (originalDueDate !== fixedInvoice.dueDate) {
         console.log("SERVER: Fixed due date from", originalDueDate, "to", fixedInvoice.dueDate);
